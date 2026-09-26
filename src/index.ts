@@ -19,7 +19,9 @@ const app = createApp({
   fetchImpl: (input, init) => globalThis.fetch(input, init),
 });
 
-export default {
-  port: Number.isInteger(port) && port > 0 ? port : 8080,
+const listenPort = Number.isInteger(port) && port > 0 ? port : 8080;
+Bun.serve({
+  hostname: "0.0.0.0",
+  port: listenPort,
   fetch: app.fetch,
-};
+});
