@@ -1,10 +1,9 @@
 /**
- * A place a caller submits once. Coordinates are geographic and rounded
- * to six decimal places. `paymentMethods` is optional and not an error
- * when it is absent or not a known list.
+ * One pin on the OpenCryptoPay map. A caller submits it once.
+ * Coordinates are rounded to six decimal places.
  */
 
-export type PlaceInput = {
+export type MapPlaceInput = {
   origin: string;
   externalId: string;
   name: string;
@@ -14,16 +13,26 @@ export type PlaceInput = {
   paymentMethods: string | null;
 };
 
-export type StoredPlace = PlaceInput & {
+export type StoredMapPlace = MapPlaceInput & {
   id: string;
   createdAt: string;
 };
 
-const COORD_ERROR = "Place must be a latitude and longitude";
-const ORIGIN_ERROR = "Place origin is invalid";
-const EXTERNAL_ID_ERROR = "Place external id is required";
-const NAME_ERROR = "Place name is required";
-const CATEGORY_ERROR = "Place category is required";
+/** Fields the public map may show. The caller's own id stays off this list. */
+export type PublicMapPlace = {
+  id: string;
+  origin: string;
+  name: string;
+  lat: number;
+  lon: number;
+  category: string;
+};
+
+const COORD_ERROR = 'Place must be a latitude and longitude';
+const ORIGIN_ERROR = 'Place origin is invalid';
+const EXTERNAL_ID_ERROR = 'Place external id is required';
+const NAME_ERROR = 'Place name is required';
+const CATEGORY_ERROR = 'Place category is required';
 
 const PAYMENT_METHODS = /^(onchain|lightning|nfc)(,(onchain|lightning|nfc))*$/;
 
@@ -43,23 +52,23 @@ function hasNoControls(value: string): boolean {
 }
 
 /**
- * Validate a JSON place body.
+ * Validate a JSON body for one map pin.
  *
  * @param input - Request JSON.
- * @returns The place, or a fixed error message.
+ * @returns The pin, or a fixed error message.
  */
-export function normalizePlace(
+export function normalizeMapPlace(
   input: unknown,
-): { ok: true; value: PlaceInput } | { ok: false; error: string } {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+): { ok: true; value: MapPlaceInput } | { ok: false; error: string } {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
     return { ok: false, error: COORD_ERROR };
   }
   const rec = input as Record<string, unknown>;
-  const lat = rec["lat"];
-  const lon = rec["lon"];
+  const lat = rec['lat'];
+  const lon = rec['lon'];
   if (
-    typeof lat !== "number" ||
-    typeof lon !== "number" ||
+    typeof lat !== 'number' ||
+    typeof lon !== 'number' ||
     !Number.isFinite(lat) ||
     !Number.isFinite(lon) ||
     lat < -90 ||
@@ -70,14 +79,13 @@ export function normalizePlace(
     return { ok: false, error: COORD_ERROR };
   }
 
-  const rawOrigin = rec["origin"];
-  if (typeof rawOrigin !== "string" || !/^[a-z][a-z0-9-]{0,31}$/.test(rawOrigin.trim())) {
+  const rawOrigin = rec['origin'];
+  if (typeof rawOrigin !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(rawOrigin.trim())) {
     return { ok: false, error: ORIGIN_ERROR };
   }
-  const origin = rawOrigin.trim();
 
-  const rawExternalId = rec["externalId"];
-  if (typeof rawExternalId !== "string") {
+  const rawExternalId = rec['externalId'];
+  if (typeof rawExternalId !== 'string') {
     return { ok: false, error: EXTERNAL_ID_ERROR };
   }
   const externalId = rawExternalId.trim();
@@ -85,8 +93,8 @@ export function normalizePlace(
     return { ok: false, error: EXTERNAL_ID_ERROR };
   }
 
-  const rawName = rec["name"];
-  if (typeof rawName !== "string") {
+  const rawName = rec['name'];
+  if (typeof rawName !== 'string') {
     return { ok: false, error: NAME_ERROR };
   }
   const name = rawName.trim();
@@ -94,8 +102,8 @@ export function normalizePlace(
     return { ok: false, error: NAME_ERROR };
   }
 
-  const rawCategory = rec["category"];
-  if (typeof rawCategory !== "string") {
+  const rawCategory = rec['category'];
+  if (typeof rawCategory !== 'string') {
     return { ok: false, error: CATEGORY_ERROR };
   }
   const category = rawCategory.trim();
@@ -104,8 +112,8 @@ export function normalizePlace(
   }
 
   let paymentMethods: string | null = null;
-  const rawPayment = rec["paymentMethods"];
-  if (typeof rawPayment === "string") {
+  const rawPayment = rec['paymentMethods'];
+  if (typeof rawPayment === 'string') {
     const trimmed = rawPayment.trim();
     if (PAYMENT_METHODS.test(trimmed)) {
       paymentMethods = trimmed;
@@ -115,7 +123,7 @@ export function normalizePlace(
   return {
     ok: true,
     value: {
-      origin,
+      origin: rawOrigin.trim(),
       externalId,
       name,
       lat: roundCoord(lat),
@@ -126,23 +134,13 @@ export function normalizePlace(
   };
 }
 
-/** Public map row. The caller's own id stays off this list. */
-export type PublicPlace = {
-  id: string;
-  origin: string;
-  name: string;
-  lat: number;
-  lon: number;
-  category: string;
-};
-
 /**
- * Drop fields that are only for the ingest caller.
+ * Drop fields that only the ingest caller needs.
  *
- * @param place - Stored row.
- * @returns The public shape.
+ * @param place - Stored pin.
+ * @returns The public map row.
  */
-export function toPublicPlace(place: StoredPlace): PublicPlace {
+export function toPublicMapPlace(place: StoredMapPlace): PublicMapPlace {
   return {
     id: place.id,
     origin: place.origin,

@@ -1,10 +1,8 @@
 # OpenCryptoPay API
 
-Public list of places that accept OpenCryptoPay, and a create-only ingest for trusted callers.
+Map API. `GET /map/places` is the public list of places. `POST /map/places` adds a place once.
 
-`GET /places` needs no login. `POST /places` needs `Authorization: Bearer <OCP_PLACE_INGEST_TOKEN>`. The same `origin` and `externalId` returns the first row and does not submit the place again.
-
-When `BTCMAP_ACCESS_TOKEN` is set, a new place is posted once to `https://api.btcmap.org/v4/place-submissions`. A missing token stores the place and skips that call.
+The same `origin` and `externalId` returns the first pin and does not submit it again. When `BTCMAP_ACCESS_TOKEN` is set, a new pin is posted once to `https://api.btcmap.org/v4/place-submissions`. A missing token stores the pin and skips that call.
 
 ## Run
 
@@ -16,10 +14,10 @@ bun install
 bun run start
 ```
 
-The database file is `data/places.sqlite` unless `PLACE_DB` is set. `PORT` defaults to `8080`.
+The process listens on port `3000` unless `PORT` is set. The database file is `data/places.sqlite` unless `PLACE_DB` is set.
 
-## Place body
+`GET /healthz` returns `{ "ok": true }`.
 
-`origin`, `externalId`, `name`, `lat`, `lon`, and `category` are required. `paymentMethods` is optional: a comma-separated list of `onchain`, `lightning`, and `nfc`.
+## Checks
 
-`GET /places` returns `id`, `origin`, `name`, `lat`, `lon`, and `category`.
+`bun run typecheck`, `bun run lint`, `bun run handbook:check`, `bun run e2e:check`, `bun run test:coverage`, and `bun run e2e`. Coverage on `src` is 100 percent. `src/index.ts` is the process entry and is exercised by the HTTP end-to-end run.

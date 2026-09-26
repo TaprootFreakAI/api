@@ -1,27 +1,27 @@
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import { createApp } from "./server.ts";
-import { PlaceStore } from "./store.ts";
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { SqliteMapPlaceStore } from '@/lib/map/sqlite';
+import { createApp } from '@/server';
 
-const filename = process.env["PLACE_DB"]?.trim() || "data/places.sqlite";
-if (filename !== ":memory:") {
+const filename = process.env['PLACE_DB']?.trim() || 'data/places.sqlite';
+if (filename !== ':memory:') {
   mkdirSync(dirname(filename), { recursive: true });
 }
-const store = new PlaceStore(filename);
-const port = Number(process.env["PORT"] ?? "8080");
+
+const store = new SqliteMapPlaceStore(filename);
+const parsedPort = Number(process.env['PORT'] ?? '3000');
+const port = Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 3000;
+const token = process.env['OCP_PLACE_INGEST_TOKEN'];
 
 const app = createApp({
   store,
-  ...(process.env["OCP_PLACE_INGEST_TOKEN"] === undefined
-    ? {}
-    : { ingestToken: process.env["OCP_PLACE_INGEST_TOKEN"] }),
   env: process.env,
   fetchImpl: (input, init) => globalThis.fetch(input, init),
+  ...(token === undefined ? {} : { ingestToken: token }),
 });
 
-const listenPort = Number.isInteger(port) && port > 0 ? port : 8080;
 Bun.serve({
-  hostname: "0.0.0.0",
-  port: listenPort,
+  hostname: '0.0.0.0',
+  port,
   fetch: app.fetch,
 });
