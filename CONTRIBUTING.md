@@ -4,9 +4,9 @@ The map API keeps the same gates as the 21.gifts API.
 
 ## Branches
 
-| Branch    | Purpose                            | Image                    |
-| --------- | ---------------------------------- | ------------------------ |
-| `develop` | Integration branch. Open pull requests here. | `opencryptopay/api:beta` |
+| Branch    | Purpose                                                  | Image                      |
+| --------- | -------------------------------------------------------- | -------------------------- |
+| `develop` | Integration branch. Open pull requests here.             | `opencryptopay/api:beta`   |
 | `main`    | Production. Moves only through the release pull request. | `opencryptopay/api:latest` |
 
 - Land work on `develop` through a feature branch and a pull request. Do not push `develop` or `main` directly.
@@ -35,22 +35,22 @@ Do not lower a coverage threshold to land a change. A genuinely unreachable bran
 
 ## CI / CD
 
-| Workflow               | Trigger           | Action                                                                 |
-| ---------------------- | ----------------- | ---------------------------------------------------------------------- |
-| `ci.yaml`              | Pull request      | Typecheck, lint, handbook, e2e-check, test (100% coverage), build, e2e |
-| `deploy-dev.yaml`      | Push to `develop` | Build and push `opencryptopay/api:beta`, then wait for the deploy      |
-| `deploy-prd.yaml`      | Push to `main`    | Build and push `opencryptopay/api:latest`, then wait for the deploy    |
+| Workflow               | Trigger           | Action                                                                  |
+| ---------------------- | ----------------- | ----------------------------------------------------------------------- |
+| `ci.yaml`              | Pull request      | Typecheck, lint, handbook, e2e-check, test (100% coverage), build, e2e  |
+| `deploy-dev.yaml`      | Push to `develop` | Build and push `opencryptopay/api:beta`, then wait for the deploy       |
+| `deploy-prd.yaml`      | Push to `main`    | Build and push `opencryptopay/api:latest`, then wait for the deploy     |
 | `auto-release-pr.yaml` | Push to `develop` | Open the release pull request (`develop` → `main`) when there is a diff |
 
 Images target `linux/arm64`.
 
 Deploy workflows need these Actions secrets:
 
-| Secret            | Purpose                                              |
-| ----------------- | ---------------------------------------------------- |
-| `DOCKER_USERNAME` | Registry username for the image push                 |
-| `DOCKER_PASSWORD` | Registry token for the image push                    |
+| Secret            | Purpose                                               |
+| ----------------- | ----------------------------------------------------- |
+| `DOCKER_USERNAME` | Registry username for the image push                  |
+| `DOCKER_PASSWORD` | Registry token for the image push                     |
 | `DISPATCH_TOKEN`  | Token that sends `image-published` and reads that run |
-| `DISPATCH_REPO`   | `owner/repo` that receives `image-published`         |
+| `DISPATCH_REPO`   | `owner/repo` that receives `image-published`          |
 
 If `DISPATCH_TOKEN` or `DISPATCH_REPO` is missing, deploy fails after the image push. The job then waits for the infrastructure run titled `image-published opencryptopay/api:<tag> <sha>` and fails when that run does not succeed.
