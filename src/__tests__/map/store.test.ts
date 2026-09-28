@@ -29,7 +29,8 @@ describe('MAP_PLACE_SCHEMA_SQL', () => {
 
 describe('MemoryMapPlaceStore', () => {
   it('inserts once and lists newest first without changing the first row', () => {
-    const store = new MemoryMapPlaceStore();
+    let tick = 0;
+    const store = new MemoryMapPlaceStore(() => new Date(Date.UTC(2026, 0, 1, 0, 0, tick++)));
     const first = store.insertIfNew(input);
     expect(first.created).toBe(true);
     const second = store.insertIfNew({ ...input, name: 'Other', lat: 1 });
