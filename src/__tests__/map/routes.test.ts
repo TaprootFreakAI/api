@@ -405,6 +405,36 @@ describe('map routes', () => {
     });
   });
 
+  it('does not treat blockchain and asset on different support rows as one pair', async () => {
+    const api = app({ token: 'secret' });
+    const created = await api.request('/map/places', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        ...body,
+        externalId: 'split-pair',
+        supports: [
+          { blockchain: 'Polygon', asset: 'ZCHF' },
+          { blockchain: 'Ethereum', asset: 'ETH' },
+        ],
+      }),
+    });
+    expect(created.status).toBe(201);
+    const mismatch = await api.request('/map/places?blockchain=Ethereum&asset=ZCHF');
+    expect(mismatch.status).toBe(200);
+    const mismatchJson = (await mismatch.json()) as { places: unknown[] };
+    expect(mismatchJson.places).toHaveLength(0);
+    const eth = await api.request('/map/places?blockchain=Ethereum&asset=ETH');
+    expect(eth.status).toBe(200);
+    const ethJson = (await eth.json()) as { places: Array<{ name: string }> };
+    expect(ethJson.places).toHaveLength(1);
+    expect(ethJson.places[0]?.name).toBe(body.name);
+    const polygon = await api.request('/map/places?blockchain=Polygon&asset=ZCHF');
+    expect(polygon.status).toBe(200);
+    const polygonJson = (await polygon.json()) as { places: unknown[] };
+    expect(polygonJson.places).toHaveLength(1);
+  });
+
   it('returns a stored dEURO asset unchanged', async () => {
     const api = app({ token: 'secret' });
     const created = await api.request('/map/places', {

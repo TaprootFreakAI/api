@@ -135,8 +135,8 @@ function replaceSupportRows(db: Database, placeId: string, supports: MapPlaceSup
 
 /**
  * SQLite {@link MapPlaceStore}. Opened by the process entrypoint.
- * Unit tests use {@link MemoryMapPlaceStore}; this driver is exercised by
- * the HTTP end-to-end run.
+ * Insert, list, and delete are exercised by the HTTP end-to-end run.
+ * The SPAR shop-name backfill is exercised by e2e/sqlite-backfill.ts.
  */
 export class SqliteMapPlaceStore implements MapPlaceStore {
   readonly #db: Database;

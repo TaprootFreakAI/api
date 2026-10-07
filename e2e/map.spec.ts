@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { expect, test } from '@playwright/test';
 
 const body = {
@@ -256,4 +257,117 @@ test('Function: normalizeMapPlaceKey — PUT updates a pin and DELETE removes it
   });
   expect(again.status()).toBe(200);
   expect(await again.json()).toEqual({ deleted: false });
+});
+
+test('Function: SqliteMapPlaceStore — limit is applied after the country filter', async ({
+  request,
+}) => {
+  const older = {
+    origin: 'dfx',
+    externalId: 'e2e-limit-ch',
+    name: 'Limit Older CH',
+    lat: 47.37,
+    lon: 8.54,
+    category: 'groceries',
+    country: 'CH',
+  };
+  const newer = {
+    origin: 'dfx',
+    externalId: 'e2e-limit-de',
+    name: 'Limit Newer DE',
+    lat: 47.37,
+    lon: 8.54,
+    category: 'groceries',
+    country: 'DE',
+  };
+  expect(
+    (
+      await request.post('/map/places', {
+        headers: { Authorization: 'Bearer e2e-ingest' },
+        data: older,
+      })
+    ).status(),
+  ).toBe(201);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(
+    (
+      await request.post('/map/places', {
+        headers: { Authorization: 'Bearer e2e-ingest' },
+        data: newer,
+      })
+    ).status(),
+  ).toBe(201);
+
+  const newest = await request.get('/map/places?limit=1');
+  expect(newest.status()).toBe(200);
+  const newestJson = (await newest.json()) as { places: Array<{ name: string }> };
+  expect(newestJson.places).toHaveLength(1);
+  expect(newestJson.places[0]?.name).toBe('Limit Newer DE');
+
+  const ch = await request.get('/map/places?limit=1&country=CH');
+  expect(ch.status()).toBe(200);
+  const chJson = (await ch.json()) as { places: Array<{ name: string }> };
+  expect(chJson.places).toHaveLength(1);
+  expect(chJson.places[0]?.name).toBe('Limit Older CH');
+});
+
+test('Function: SqliteMapPlaceStore — delete removes the pin and its support from filters', async ({
+  request,
+}) => {
+  const pin = {
+    origin: 'dfx',
+    externalId: 'e2e-support-delete',
+    name: 'Support Delete Pin',
+    lat: 47.37,
+    lon: 8.54,
+    category: 'groceries',
+    supports: [{ blockchain: 'Plasma', asset: 'ONDO' }],
+  };
+  expect(
+    (
+      await request.post('/map/places', {
+        headers: { Authorization: 'Bearer e2e-ingest' },
+        data: pin,
+      })
+    ).status(),
+  ).toBe(201);
+
+  const filters = await request.get('/map/filters');
+  expect(filters.status()).toBe(200);
+  const filterJson = (await filters.json()) as {
+    shopNames: string[];
+    countries: string[];
+    blockchains: string[];
+    assets: string[];
+  };
+  expect(filterJson.blockchains).toContain('Plasma');
+  expect(filterJson.assets).toContain('ONDO');
+
+  const deleted = await request.delete('/map/places', {
+    headers: { Authorization: 'Bearer e2e-ingest' },
+    data: { origin: 'dfx', externalId: 'e2e-support-delete' },
+  });
+  expect(deleted.status()).toBe(200);
+  expect(await deleted.json()).toEqual({ deleted: true });
+
+  const afterFilters = await request.get('/map/filters');
+  expect(afterFilters.status()).toBe(200);
+  const afterFilterJson = (await afterFilters.json()) as {
+    shopNames: string[];
+    countries: string[];
+    blockchains: string[];
+    assets: string[];
+  };
+  expect(afterFilterJson.blockchains).not.toContain('Plasma');
+  expect(afterFilterJson.assets).not.toContain('ONDO');
+
+  const afterDelete = (await (await request.get('/map/places')).json()) as {
+    places: Array<{ name: string }>;
+  };
+  expect(afterDelete.places.some((row) => row.name === 'Support Delete Pin')).toBe(false);
+});
+
+test('Function: SqliteMapPlaceStore — opening backfills only a null SPAR shop name', () => {
+  const stdout = execFileSync('bun', ['e2e/sqlite-backfill.ts'], { encoding: 'utf8' });
+  expect(stdout.trim()).toBe('ok');
 });
