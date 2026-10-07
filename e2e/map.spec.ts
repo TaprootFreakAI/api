@@ -193,6 +193,40 @@ test('Function: normalizeMapPlaceFilter — filters one row', async ({ request }
   expect(filterJson.assets).toContain('ZCHF');
 });
 
+test('Function: SqliteMapPlaceStore — a pair is one support row', async ({ request }) => {
+  const pin = {
+    origin: 'dfx',
+    externalId: 'e2e-split-pair',
+    name: 'Split Pair Pin',
+    lat: 47.37,
+    lon: 8.54,
+    category: 'groceries',
+    supports: [
+      { blockchain: 'Polygon', asset: 'ZCHF' },
+      { blockchain: 'Ethereum', asset: 'ETH' },
+    ],
+  };
+  expect(
+    (
+      await request.post('/map/places', {
+        headers: { Authorization: 'Bearer e2e-ingest' },
+        data: pin,
+      })
+    ).status(),
+  ).toBe(201);
+
+  const names = async (query: string): Promise<string[]> => {
+    const response = await request.get(`/map/places?${query}`);
+    expect(response.status()).toBe(200);
+    const json = (await response.json()) as { places: Array<{ name: string }> };
+    return json.places.map((row) => row.name);
+  };
+
+  expect(await names('blockchain=Ethereum&asset=ZCHF')).not.toContain('Split Pair Pin');
+  expect(await names('blockchain=Ethereum&asset=ETH')).toContain('Split Pair Pin');
+  expect(await names('blockchain=Polygon&asset=ZCHF')).toContain('Split Pair Pin');
+});
+
 test('Function: normalizeMapPlaceKey — PUT updates a pin and DELETE removes it', async ({
   request,
 }) => {
@@ -331,6 +365,23 @@ test('Function: SqliteMapPlaceStore — delete removes the pin and its support f
       })
     ).status(),
   ).toBe(201);
+  const keep = {
+    origin: 'dfx',
+    externalId: 'e2e-support-keep',
+    name: 'Support Keep Pin',
+    lat: 46.95,
+    lon: 7.44,
+    category: 'groceries',
+    supports: [{ blockchain: 'Ethereum', asset: 'dEURO' }],
+  };
+  expect(
+    (
+      await request.post('/map/places', {
+        headers: { Authorization: 'Bearer e2e-ingest' },
+        data: keep,
+      })
+    ).status(),
+  ).toBe(201);
 
   const filters = await request.get('/map/filters');
   expect(filters.status()).toBe(200);
@@ -365,6 +416,13 @@ test('Function: SqliteMapPlaceStore — delete removes the pin and its support f
     places: Array<{ name: string }>;
   };
   expect(afterDelete.places.some((row) => row.name === 'Support Delete Pin')).toBe(false);
+  expect(afterDelete.places.some((row) => row.name === 'Support Keep Pin')).toBe(true);
+
+  const kept = await request.get('/map/places?blockchain=Ethereum&asset=dEURO');
+  expect(kept.status()).toBe(200);
+  const keptJson = (await kept.json()) as { places: Array<{ name: string }> };
+  expect(keptJson.places.some((row) => row.name === 'Support Keep Pin')).toBe(true);
+  expect(keptJson.places.some((row) => row.name === 'Support Delete Pin')).toBe(false);
 });
 
 test('Function: SqliteMapPlaceStore — opening backfills only a null SPAR shop name', () => {
