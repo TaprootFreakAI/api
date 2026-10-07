@@ -13,7 +13,7 @@ export type AppDeps = {
 };
 
 /**
- * HTTP API. `GET /healthz` and `GET /map/places` are public.
+ * HTTP API. `GET /healthz`, `GET /map/places`, and `GET /map/filters` are public.
  * `POST /map/places` creates a pin once. `PUT /map/places` updates a pin.
  * `DELETE /map/places` removes a pin.
  *

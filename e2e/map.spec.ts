@@ -23,6 +23,54 @@ test('Function: mapRoutes — GET /map/places is public', async ({ request }) =>
   expect(Array.isArray(json.places)).toBe(true);
 });
 
+test('Function: normalizePlaceOrigin — GET /map/places?origin=spar filters the list', async ({
+  request,
+}) => {
+  const sparPin = {
+    origin: 'spar',
+    externalId: 'e2e-origin-spar',
+    name: 'Origin SPAR Pin',
+    lat: 47.37,
+    lon: 8.54,
+    category: 'groceries',
+  };
+  const otherPin = {
+    origin: 'dfx',
+    externalId: 'e2e-origin-other',
+    name: 'Origin Other Pin',
+    lat: 47.37,
+    lon: 8.54,
+    category: 'groceries',
+  };
+  expect(
+    (
+      await request.post('/map/places', {
+        headers: { Authorization: 'Bearer e2e-ingest' },
+        data: sparPin,
+      })
+    ).status(),
+  ).toBe(201);
+  expect(
+    (
+      await request.post('/map/places', {
+        headers: { Authorization: 'Bearer e2e-ingest' },
+        data: otherPin,
+      })
+    ).status(),
+  ).toBe(201);
+
+  const filtered = await request.get('/map/places?origin=spar');
+  expect(filtered.status()).toBe(200);
+  const json = (await filtered.json()) as { places: Array<{ origin: string; name: string }> };
+  expect(json.places.some((row) => row.name === 'Origin SPAR Pin')).toBe(true);
+  expect(json.places.some((row) => row.name === 'Origin Other Pin')).toBe(false);
+  expect(json.places.every((row) => row.origin === 'spar')).toBe(true);
+
+  const bad = await request.get('/map/places?origin=SPAR');
+  expect(bad.status()).toBe(400);
+  expect(await bad.json()).toEqual({ error: 'Place origin is invalid' });
+});
+
 test('Function: createApp — POST /map/places without a bearer is 401', async ({ request }) => {
   const res = await request.post('/map/places', { data: body });
   expect(res.status()).toBe(401);
@@ -80,6 +128,68 @@ test('Function: MemoryMapPlaceStore — default boot does not require a map toke
 test('Function: pushMapPlace — default boot does not require a map token', async ({ request }) => {
   const res = await request.get('/healthz');
   expect(res.status()).toBe(200);
+});
+
+test('Function: normalizeMapPlaceFilter — filters one row', async ({ request }) => {
+  const sparPin = {
+    origin: 'dfx',
+    externalId: 'e2e-filter-spar-ch',
+    name: 'Filter SPAR CH',
+    lat: 47.37,
+    lon: 8.54,
+    category: 'groceries',
+    country: 'CH',
+    shopName: 'SPAR',
+    supports: [{ blockchain: 'Ethereum', asset: 'ZCHF' }],
+  };
+  const otherPin = {
+    origin: 'dfx',
+    externalId: 'e2e-filter-other',
+    name: 'Filter Other Pin',
+    lat: 47.37,
+    lon: 8.54,
+    category: 'groceries',
+    country: 'DE',
+    shopName: 'Migros',
+    supports: [{ blockchain: 'Bitcoin', asset: 'BTC' }],
+  };
+  expect(
+    (
+      await request.post('/map/places', {
+        headers: { Authorization: 'Bearer e2e-ingest' },
+        data: sparPin,
+      })
+    ).status(),
+  ).toBe(201);
+  expect(
+    (
+      await request.post('/map/places', {
+        headers: { Authorization: 'Bearer e2e-ingest' },
+        data: otherPin,
+      })
+    ).status(),
+  ).toBe(201);
+
+  const filtered = await request.get(
+    '/map/places?shopName=SPAR&country=CH&blockchain=Ethereum&asset=ZCHF',
+  );
+  expect(filtered.status()).toBe(200);
+  const listed = (await filtered.json()) as { places: Array<{ name: string }> };
+  expect(listed.places.some((row) => row.name === 'Filter SPAR CH')).toBe(true);
+  expect(listed.places.some((row) => row.name === 'Filter Other Pin')).toBe(false);
+
+  const filters = await request.get('/map/filters');
+  expect(filters.status()).toBe(200);
+  const filterJson = (await filters.json()) as {
+    shopNames: string[];
+    countries: string[];
+    blockchains: string[];
+    assets: string[];
+  };
+  expect(filterJson.shopNames).toEqual(['SPAR', 'others']);
+  expect(filterJson.countries).toContain('CH');
+  expect(filterJson.blockchains).toContain('Ethereum');
+  expect(filterJson.assets).toContain('ZCHF');
 });
 
 test('Function: normalizeMapPlaceKey — PUT updates a pin and DELETE removes it', async ({

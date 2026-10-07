@@ -9,9 +9,16 @@
 
 ## Endpoint: GET /map/places
 
-- **Purpose:** Public map list, newest first. Each item is `id`, `origin`, `name`, `lat`, `lon`, `category`, and `techProvider`. The caller id and payment methods are not included.
-- **Errors:** 400 `{ error: "Invalid limit" }` when `limit` is not an integer from 1 to 1000. Omitted `limit` means 1000.
+- **Purpose:** Public map list, newest first. Each item is `id`, `origin`, `name`, `lat`, `lon`, `category`, `techProvider`, `country`, `shopName`, and `supports`. `country` is the stored DFX country symbol or null. `shopName` is the stored brand or null. `supports` is the stored blockchain and asset pairs, sorted. The caller id and payment methods are not included. Omitted `origin` is every pin. A present `origin` must be the same token as a stored origin. Optional `country`, `shopName` (`SPAR` or `others`), `blockchain`, and `asset` further restrict the store read. All predicates are AND and run before `limit`. `country` is a stored column, not inferred from an address.
+- **Errors:** 400 `{ error: "Invalid limit" }` when `limit` is not an integer from 1 to 1000. Omitted `limit` means 1000. 400 `{ error: "Place origin is invalid" }` when `origin` is present but not a valid origin token. 400 `{ error: "Place country is invalid" }` when `country` is present but not an assigned ISO 3166-1 alpha-2 DFX country symbol. 400 `{ error: "Place shop name is invalid" }` when `shopName` is present and not `SPAR` or `others`. 400 `{ error: "Place support is invalid" }` when `blockchain` or `asset` is present but not a DFX payment-network name or DFX asset name.
 - **Used by:** The OpenCryptoPay map.
+- **Auth:** none. Browser calls are allowed from any origin.
+
+## Endpoint: GET /map/filters
+
+- **Purpose:** Public list of filter values for the map. `shopNames` is always exactly `["SPAR", "others"]`. `countries` are the distinct stored ISO country codes, sorted. `blockchains` are the distinct support blockchains, sorted. `assets` are the distinct support assets, sorted. `?blockchain=` limits `assets` to that chain and still returns every blockchain.
+- **Errors:** 400 `{ error: "Place support is invalid" }` when `blockchain` is present but not a DFX payment-network name.
+- **Used by:** The OpenCryptoPay map filter UI.
 - **Auth:** none. Browser calls are allowed from any origin.
 
 ## Endpoint: POST /map/places

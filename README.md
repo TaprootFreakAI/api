@@ -1,6 +1,6 @@
 # OpenCryptoPay API
 
-Map API. `GET /map/places` is the public list of places, each with a tech provider. `POST /map/places` adds a place once. `PUT /map/places` updates a place. `DELETE /map/places` removes a place.
+Map API. `GET /map/places` is the public list of places, each with a tech provider; `?origin=` limits that list to one origin. The list can also be limited by country, shopName (`SPAR` or `others`), blockchain, and asset; country is a stored column (the DFX country symbol), blockchain is a DFX payment-network name, and asset is the DFX asset name. `GET /map/filters` lists those filter values. `POST /map/places` adds a place once. `PUT /map/places` updates a place. `DELETE /map/places` removes a place.
 
 The same `origin` and `externalId` returns the first pin and does not submit it again. When `BTCMAP_ACCESS_TOKEN` is set, a new pin is posted once to `https://api.btcmap.org/v4/place-submissions`. A missing token stores the pin and skips that call.
 
