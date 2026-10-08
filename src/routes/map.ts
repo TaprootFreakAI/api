@@ -2,8 +2,14 @@ import { timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { pushMapPlace, type FetchLike, type MapPushResult } from '@/lib/map/btcmap';
-import { normalizeMapPlace, normalizeMapPlaceKey, toPublicMapPlace } from '@/lib/map/place';
-import type { MapPlaceStore } from '@/lib/map/store';
+import {
+  normalizeMapPlace,
+  normalizeMapPlaceFilter,
+  normalizeMapPlaceKey,
+  normalizePlaceOrigin,
+  toPublicMapPlace,
+} from '@/lib/map/place';
+import type { MapPlaceListFilter, MapPlaceStore } from '@/lib/map/store';
 
 export type MapRouteDeps = {
   store: MapPlaceStore;
@@ -62,8 +68,49 @@ export function mapRoutes(deps: MapRouteDeps): Hono {
       }
       limit = n;
     }
-    const places = deps.store.list(limit).map((place) => toPublicMapPlace(place));
+    const originQuery = c.req.query('origin');
+    let origin: string | undefined;
+    if (originQuery !== undefined) {
+      const parsedOrigin = normalizePlaceOrigin(originQuery);
+      if (!parsedOrigin.ok) {
+        return c.json({ error: parsedOrigin.error }, 400);
+      }
+      origin = parsedOrigin.value;
+    }
+    const parsedFilter = normalizeMapPlaceFilter(
+      c.req.query('country'),
+      c.req.query('shopName'),
+      c.req.query('blockchain'),
+      c.req.query('asset'),
+    );
+    if (!parsedFilter.ok) {
+      return c.json({ error: parsedFilter.error }, 400);
+    }
+    const filter: MapPlaceListFilter = { ...parsedFilter.value };
+    if (origin !== undefined) {
+      filter.origin = origin;
+    }
+    const places = deps.store.list(limit, filter).map((place) => toPublicMapPlace(place));
     return c.json({ places });
+  });
+
+  app.get('/filters', (c) => {
+    const parsed = normalizeMapPlaceFilter(
+      undefined,
+      undefined,
+      c.req.query('blockchain'),
+      undefined,
+    );
+    if (!parsed.ok) {
+      return c.json({ error: parsed.error }, 400);
+    }
+    const values = deps.store.filters(parsed.value.blockchain);
+    return c.json({
+      shopNames: ['SPAR', 'others'],
+      countries: values.countries,
+      blockchains: values.blockchains,
+      assets: values.assets,
+    });
   });
 
   app.post('/places', async (c) => {
