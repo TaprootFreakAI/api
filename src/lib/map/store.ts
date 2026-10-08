@@ -22,6 +22,7 @@ export const MAP_PLACE_SCHEMA_SQL = `CREATE TABLE IF NOT EXISTS map_place (
   tech_provider TEXT NOT NULL DEFAULT 'DFX.swiss',
   country TEXT,
   shop_name TEXT,
+  last_transaction_at TEXT,
   UNIQUE (origin, external_id)
 );
 CREATE TABLE IF NOT EXISTS map_place_support (
@@ -127,6 +128,7 @@ function toStoredPlace(input: MapPlaceInput, id: string, createdAt: string): Sto
     country: input.country ?? null,
     shopName: input.shopName ?? null,
     supports: storedSupports(input.supports ?? []),
+    lastTransactionAt: null,
     id,
     createdAt,
   };
@@ -138,6 +140,11 @@ function toStoredPlace(input: MapPlaceInput, id: string, createdAt: string): Sto
 export interface MapPlaceStore {
   insertIfNew(input: MapPlaceInput): { created: boolean; place: StoredMapPlace };
   upsert(input: MapPlaceInput): { created: boolean; place: StoredMapPlace };
+  recordTransaction(
+    origin: string,
+    externalId: string,
+    occurredAt: string,
+  ): StoredMapPlace | undefined;
   deleteByKey(origin: string, externalId: string): boolean;
   list(limit: number, filter?: MapPlaceListFilter): StoredMapPlace[];
   filters(blockchain?: string | undefined): {
@@ -207,6 +214,40 @@ export class MemoryMapPlaceStore implements MapPlaceStore {
       existing.supports = storedSupports(input.supports);
     }
     return { created: false, place: copyStoredPlace(existing) };
+  }
+
+  /**
+   * Store a newer transaction instant for an existing pin.
+   *
+   * @param origin - Pin origin.
+   * @param externalId - Caller id.
+   * @param occurredAt - Instant to store. An unparseable argument is ignored.
+   * @returns A copy of the row, or undefined when the pair is missing. A written instant is
+   * canonical ISO.
+   */
+  recordTransaction(
+    origin: string,
+    externalId: string,
+    occurredAt: string,
+  ): StoredMapPlace | undefined {
+    const existing = this.#rows.find(
+      (row) => row.origin === origin && row.externalId === externalId,
+    );
+    if (existing === undefined) {
+      return undefined;
+    }
+    const newMs = Date.parse(occurredAt);
+    if (!Number.isFinite(newMs)) {
+      return copyStoredPlace(existing);
+    }
+    const canonical = new Date(newMs).toISOString();
+    const storedMs =
+      existing.lastTransactionAt === null ? Number.NaN : Date.parse(existing.lastTransactionAt);
+    if (Number.isFinite(storedMs) && storedMs >= newMs) {
+      return copyStoredPlace(existing);
+    }
+    existing.lastTransactionAt = canonical;
+    return copyStoredPlace(existing);
   }
 
   /**

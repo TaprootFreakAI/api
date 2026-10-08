@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS map_place (
   tech_provider TEXT NOT NULL DEFAULT 'DFX.swiss',
   country TEXT,
   shop_name TEXT,
+  last_transaction_at TEXT,
   UNIQUE (origin, external_id)
 );
 CREATE TABLE IF NOT EXISTS map_place_support (

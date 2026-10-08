@@ -10,6 +10,8 @@ export type AppDeps = {
   ingestToken?: string;
   env: Record<string, string | undefined>;
   fetchImpl: FetchLike;
+  /** Request clock. Unset means `Date.now`. */
+  now?: () => number;
 };
 
 /**
@@ -17,7 +19,7 @@ export type AppDeps = {
  * `POST /map/places` creates a pin once. `PUT /map/places` updates a pin.
  * `DELETE /map/places` removes a pin.
  *
- * @param deps - Store, ingest token, and the BTC Map environment.
+ * @param deps - Store, ingest token, the BTC Map environment, and an optional clock.
  * @returns The application.
  */
 export function createApp(deps: AppDeps): Hono {
@@ -30,6 +32,7 @@ export function createApp(deps: AppDeps): Hono {
       env: deps.env,
       fetchImpl: deps.fetchImpl,
       ...(deps.ingestToken === undefined ? {} : { ingestToken: deps.ingestToken }),
+      ...(deps.now === undefined ? {} : { now: deps.now }),
     }),
   );
   return app;

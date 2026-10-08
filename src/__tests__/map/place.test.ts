@@ -4,6 +4,8 @@ import {
   normalizeMapPlaceFilter,
   normalizeMapPlaceKey,
   normalizePlaceOrigin,
+  normalizePlaceTransaction,
+  placeActivity,
   toPublicMapPlace,
 } from '@/lib/map/place';
 import type { StoredMapPlace } from '@/lib/map/place';
@@ -534,7 +536,137 @@ describe('normalizeMapPlaceKey', () => {
   });
 });
 
+describe('placeActivity', () => {
+  const nowMs = Date.parse('2026-10-08T00:00:00.000Z');
+
+  it('classifies null, unparseable, future, and the 7-day and 30-day bounds', () => {
+    expect(placeActivity(null, nowMs)).toBe('none');
+    expect(placeActivity('not-a-date', nowMs)).toBe('none');
+    expect(placeActivity(new Date(nowMs + 1).toISOString(), nowMs)).toBe('within7Days');
+    expect(placeActivity(new Date(nowMs - 3 * 24 * 60 * 60 * 1000).toISOString(), nowMs)).toBe(
+      'within7Days',
+    );
+    expect(placeActivity(new Date(nowMs - 7 * 24 * 60 * 60 * 1000).toISOString(), nowMs)).toBe(
+      'within7Days',
+    );
+    expect(
+      placeActivity(new Date(nowMs - (7 * 24 * 60 * 60 * 1000 + 1)).toISOString(), nowMs),
+    ).toBe('within30Days');
+    expect(placeActivity(new Date(nowMs - 15 * 24 * 60 * 60 * 1000).toISOString(), nowMs)).toBe(
+      'within30Days',
+    );
+    expect(placeActivity(new Date(nowMs - 30 * 24 * 60 * 60 * 1000).toISOString(), nowMs)).toBe(
+      'within30Days',
+    );
+    expect(
+      placeActivity(new Date(nowMs - (30 * 24 * 60 * 60 * 1000 + 1)).toISOString(), nowMs),
+    ).toBe('none');
+  });
+});
+
+describe('normalizePlaceTransaction', () => {
+  const nowMs = Date.parse('2026-10-08T00:00:00.000Z');
+  const key = { origin: 'dfx', externalId: 'store-1' };
+
+  it('rejects a non-object and an array with the key error', () => {
+    expect(normalizePlaceTransaction(null, nowMs)).toEqual({
+      ok: false,
+      error: 'Place origin is invalid',
+    });
+    expect(normalizePlaceTransaction([], nowMs)).toEqual({
+      ok: false,
+      error: 'Place origin is invalid',
+    });
+    expect(normalizePlaceTransaction('x', nowMs)).toEqual({
+      ok: false,
+      error: 'Place origin is invalid',
+    });
+  });
+
+  it('rejects a bad origin and external id with the key error strings', () => {
+    expect(normalizePlaceTransaction({ origin: 1, externalId: 'store-1' }, nowMs)).toEqual({
+      ok: false,
+      error: 'Place origin is invalid',
+    });
+    expect(normalizePlaceTransaction({ origin: 'DFX', externalId: 'store-1' }, nowMs)).toEqual({
+      ok: false,
+      error: 'Place origin is invalid',
+    });
+    expect(normalizePlaceTransaction({ origin: 'dfx', externalId: 1 }, nowMs)).toEqual({
+      ok: false,
+      error: 'Place external id is required',
+    });
+    expect(normalizePlaceTransaction({ origin: 'dfx', externalId: '' }, nowMs)).toEqual({
+      ok: false,
+      error: 'Place external id is required',
+    });
+  });
+
+  it('defaults omitted occurredAt and canonicalizes a parseable instant', () => {
+    expect(normalizePlaceTransaction(key, nowMs)).toEqual({
+      ok: true,
+      value: { ...key, occurredAt: new Date(nowMs).toISOString() },
+    });
+    expect(
+      normalizePlaceTransaction({ ...key, occurredAt: '2026-10-01T00:00:00Z' }, nowMs),
+    ).toEqual({
+      ok: true,
+      value: { ...key, occurredAt: '2026-10-01T00:00:00.000Z' },
+    });
+    expect(
+      normalizePlaceTransaction({ ...key, occurredAt: '2026-10-01T02:00:00+02:00' }, nowMs),
+    ).toEqual({
+      ok: true,
+      value: { ...key, occurredAt: '2026-10-01T00:00:00.000Z' },
+    });
+  });
+
+  it('rejects a null, number, blank, whitespace, or unparseable occurredAt', () => {
+    expect(normalizePlaceTransaction({ ...key, occurredAt: null }, nowMs)).toEqual({
+      ok: false,
+      error: 'Place transaction time is invalid',
+    });
+    expect(normalizePlaceTransaction({ ...key, occurredAt: 1 }, nowMs)).toEqual({
+      ok: false,
+      error: 'Place transaction time is invalid',
+    });
+    expect(normalizePlaceTransaction({ ...key, occurredAt: '' }, nowMs)).toEqual({
+      ok: false,
+      error: 'Place transaction time is invalid',
+    });
+    expect(normalizePlaceTransaction({ ...key, occurredAt: '   ' }, nowMs)).toEqual({
+      ok: false,
+      error: 'Place transaction time is invalid',
+    });
+    expect(normalizePlaceTransaction({ ...key, occurredAt: 'not-a-date' }, nowMs)).toEqual({
+      ok: false,
+      error: 'Place transaction time is invalid',
+    });
+  });
+
+  it('accepts exactly 120 seconds of future skew and rejects one millisecond later', () => {
+    const atSkew = nowMs + 120_000;
+    expect(
+      normalizePlaceTransaction({ ...key, occurredAt: new Date(atSkew).toISOString() }, nowMs),
+    ).toEqual({
+      ok: true,
+      value: { ...key, occurredAt: new Date(atSkew).toISOString() },
+    });
+    expect(
+      normalizePlaceTransaction(
+        { ...key, occurredAt: new Date(nowMs + 120_001).toISOString() },
+        nowMs,
+      ),
+    ).toEqual({
+      ok: false,
+      error: 'Place transaction time is invalid',
+    });
+  });
+});
+
 describe('toPublicMapPlace', () => {
+  const nowMs = Date.parse('2026-09-26T00:00:00.000Z');
+
   it('omits the caller id and payment methods', () => {
     const stored: StoredMapPlace = {
       ...valid,
@@ -544,8 +676,9 @@ describe('toPublicMapPlace', () => {
       country: null,
       shopName: null,
       supports: [],
+      lastTransactionAt: null,
     };
-    expect(toPublicMapPlace(stored)).toEqual({
+    expect(toPublicMapPlace(stored, nowMs)).toEqual({
       id: 'id-1',
       origin: 'dfx',
       name: 'SPAR',
@@ -556,6 +689,7 @@ describe('toPublicMapPlace', () => {
       country: null,
       shopName: null,
       supports: [],
+      activity: 'none',
     });
   });
 
@@ -569,8 +703,9 @@ describe('toPublicMapPlace', () => {
       country: 'CH',
       shopName: 'SPAR',
       supports,
+      lastTransactionAt: null,
     };
-    const publicPlace = toPublicMapPlace(stored);
+    const publicPlace = toPublicMapPlace(stored, nowMs);
     expect(publicPlace).toEqual({
       id: 'id-1',
       origin: 'dfx',
@@ -582,6 +717,7 @@ describe('toPublicMapPlace', () => {
       country: 'CH',
       shopName: 'SPAR',
       supports: [{ blockchain: 'Ethereum', asset: 'ZCHF' }],
+      activity: 'none',
     });
     publicPlace.supports.push({ blockchain: 'Polygon', asset: 'ETH' });
     expect(stored.supports).toEqual([{ blockchain: 'Ethereum', asset: 'ZCHF' }]);

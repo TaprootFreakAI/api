@@ -34,6 +34,7 @@ export type StoredMapPlace = Omit<
   country: string | null;
   shopName: string | null;
   supports: MapPlaceSupport[];
+  lastTransactionAt: string | null;
 };
 
 /** Fields the public map may show. The caller's own id stays off this list. */
@@ -48,6 +49,7 @@ export type PublicMapPlace = {
   country: string | null;
   shopName: string | null;
   supports: MapPlaceSupport[];
+  activity: 'within7Days' | 'within30Days' | 'none';
 };
 
 /** Query fields that restrict GET /map/places, all optional. */
@@ -67,6 +69,7 @@ const TECH_PROVIDER_ERROR = 'Place tech provider is invalid';
 const COUNTRY_ERROR = 'Place country is invalid';
 const SHOP_NAME_ERROR = 'Place shop name is invalid';
 const SUPPORT_ERROR = 'Place support is invalid';
+const TRANSACTION_TIME_ERROR = 'Place transaction time is invalid';
 
 const PAYMENT_METHODS = /^(onchain|lightning|nfc)(,(onchain|lightning|nfc))*$/;
 const TECH_PROVIDER = /^[A-Za-z0-9][A-Za-z0-9.-]{0,39}$/;
@@ -706,6 +709,80 @@ export function normalizeMapPlaceKey(
 }
 
 /**
+ * Classify a stored transaction instant relative to the request clock.
+ *
+ * @param lastTransactionAt - Stored instant, or null when none.
+ * @param nowMs - Request clock in milliseconds.
+ * @returns One of the three mutually exclusive activity buckets.
+ */
+export function placeActivity(
+  lastTransactionAt: string | null,
+  nowMs: number,
+): 'within7Days' | 'within30Days' | 'none' {
+  if (lastTransactionAt === null) {
+    return 'none';
+  }
+  const parsed = Date.parse(lastTransactionAt);
+  if (!Number.isFinite(parsed)) {
+    return 'none';
+  }
+  const age = nowMs - parsed;
+  if (age <= 7 * 24 * 60 * 60 * 1000) {
+    return 'within7Days';
+  }
+  if (age <= 30 * 24 * 60 * 60 * 1000) {
+    return 'within30Days';
+  }
+  return 'none';
+}
+
+/**
+ * Validate a JSON body that records a shop transaction.
+ *
+ * @param input - Request JSON.
+ * @param nowMs - Request clock in milliseconds.
+ * @returns The key and a canonical instant, or a fixed error message.
+ */
+export function normalizePlaceTransaction(
+  input: unknown,
+  nowMs: number,
+):
+  | { ok: true; value: { origin: string; externalId: string; occurredAt: string } }
+  | { ok: false; error: string } {
+  const key = normalizeMapPlaceKey(input);
+  if (!key.ok) {
+    return key;
+  }
+  const rec = input as Record<string, unknown>;
+  const rawOccurredAt = rec['occurredAt'];
+  if (rawOccurredAt === undefined) {
+    return {
+      ok: true,
+      value: {
+        origin: key.value.origin,
+        externalId: key.value.externalId,
+        occurredAt: new Date(nowMs).toISOString(),
+      },
+    };
+  }
+  if (typeof rawOccurredAt !== 'string' || rawOccurredAt.trim() === '') {
+    return { ok: false, error: TRANSACTION_TIME_ERROR };
+  }
+  const parsed = Date.parse(rawOccurredAt);
+  if (!Number.isFinite(parsed) || parsed > nowMs + 120_000) {
+    return { ok: false, error: TRANSACTION_TIME_ERROR };
+  }
+  return {
+    ok: true,
+    value: {
+      origin: key.value.origin,
+      externalId: key.value.externalId,
+      occurredAt: new Date(parsed).toISOString(),
+    },
+  };
+}
+
+/**
  * Validate optional public map query fields.
  *
  * @param country - Optional ISO country query.
@@ -756,9 +833,10 @@ export function normalizeMapPlaceFilter(
  * Drop fields that only the ingest caller needs.
  *
  * @param place - Stored pin.
- * @returns The public map row.
+ * @param nowMs - Request clock in milliseconds.
+ * @returns The public map row, including activity.
  */
-export function toPublicMapPlace(place: StoredMapPlace): PublicMapPlace {
+export function toPublicMapPlace(place: StoredMapPlace, nowMs: number): PublicMapPlace {
   return {
     id: place.id,
     origin: place.origin,
@@ -773,5 +851,6 @@ export function toPublicMapPlace(place: StoredMapPlace): PublicMapPlace {
       blockchain: item.blockchain,
       asset: item.asset,
     })),
+    activity: placeActivity(place.lastTransactionAt, nowMs),
   };
 }

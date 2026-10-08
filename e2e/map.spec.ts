@@ -559,6 +559,55 @@ test('Function: isCatalogAsset — catalog asset names are filter queries', asyn
   expect((await request.get('/map/places?asset=Ethereum/ZCHF')).status()).toBe(400);
 });
 
+test('Function: placeActivity — a recorded transaction is within7Days', async ({ request }) => {
+  const pin = {
+    origin: 'dfx',
+    externalId: 'e2e-activity-recent',
+    name: 'Activity Recent Pin',
+    lat: 47.37,
+    lon: 8.54,
+    category: 'groceries',
+  };
+  expect(
+    (
+      await request.post('/map/places', {
+        headers: { Authorization: 'Bearer e2e-ingest' },
+        data: pin,
+      })
+    ).status(),
+  ).toBe(201);
+  const recorded = await request.post('/map/places/transactions', {
+    headers: { Authorization: 'Bearer e2e-ingest' },
+    data: { origin: 'dfx', externalId: 'e2e-activity-recent' },
+  });
+  expect(recorded.status()).toBe(200);
+  expect(await recorded.json()).toEqual({ activity: 'within7Days' });
+  const listed = await request.get('/map/places');
+  const json = (await listed.json()) as { places: Array<{ name: string; activity: string }> };
+  expect(
+    json.places.some((row) => row.name === 'Activity Recent Pin' && row.activity === 'within7Days'),
+  ).toBe(true);
+
+  const missing = await request.post('/map/places/transactions', {
+    headers: { Authorization: 'Bearer e2e-ingest' },
+    data: { origin: 'dfx', externalId: 'e2e-activity-missing' },
+  });
+  expect(missing.status()).toBe(404);
+  expect(await missing.json()).toEqual({ error: 'Place not found' });
+});
+
+test('Function: normalizePlaceTransaction — a future occurredAt beyond skew is 400', async ({
+  request,
+}) => {
+  const occurredAt = new Date(Date.now() + 3 * 60 * 1000).toISOString();
+  const res = await request.post('/map/places/transactions', {
+    headers: { Authorization: 'Bearer e2e-ingest' },
+    data: { origin: 'dfx', externalId: 'e2e-activity-recent', occurredAt },
+  });
+  expect(res.status()).toBe(400);
+  expect(await res.json()).toEqual({ error: 'Place transaction time is invalid' });
+});
+
 test('Function: SqliteMapPlaceStore — opening backfills only a null SPAR shop name', () => {
   const stdout = execFileSync('bun', ['e2e/sqlite-backfill.ts'], { encoding: 'utf8' });
   expect(stdout.trim()).toBe('ok');
