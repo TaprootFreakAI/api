@@ -212,7 +212,7 @@ describe('MemoryMapPlaceStore', () => {
     expect(ids({ blockchain: 'BinancePay' }).sort()).toEqual(['dfx-open']);
     expect(ids({ asset: 'ckBTC' }).sort()).toEqual(['dfx-open']);
     expect(ids({ blockchain: 'Bitcoin' }).sort()).toEqual(['dfx-open']);
-    expect(ids({ blockchain: 'Polygon', asset: 'ZCHF' }).sort()).toEqual(['dfx-open', 'stated']);
+    expect(ids({ blockchain: 'Polygon', asset: 'ZCHF' })).toEqual(['stated']);
     expect(ids({ shopName: 'SPAR' })).toEqual([]);
     expect(ids({ shopName: 'others' }).sort()).toEqual([
       'dfx-open',
