@@ -409,7 +409,7 @@ function uniqueSortedSupports(items: MapPlaceSupport[]): MapPlaceSupport[] {
 export function normalizePlaceOrigin(
   raw: unknown,
 ): { ok: true; value: string } | { ok: false; error: string } {
-  if (typeof raw !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(raw.trim())) {
+  if (typeof raw !== 'string' || !/^[a-z0-9][a-z0-9-]{0,31}$/.test(raw.trim())) {
     return { ok: false, error: ORIGIN_ERROR };
   }
   return { ok: true, value: raw.trim() };
