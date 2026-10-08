@@ -46,8 +46,14 @@ describe('MemoryMapPlaceStore', () => {
     expect(listed.map((row) => row.externalId)).toEqual(['store-2', 'store-1']);
     expect(store.list(1)).toHaveLength(1);
     expect(store.list(10, {}).map((row) => row.externalId)).toEqual(['store-2', 'store-1']);
-    expect(store.list(10, { blockchain: 'Ethereum' })).toHaveLength(0);
-    expect(store.list(10, { asset: 'ZCHF' })).toHaveLength(0);
+    expect(store.list(10, { blockchain: 'Ethereum' }).map((row) => row.externalId)).toEqual([
+      'store-2',
+      'store-1',
+    ]);
+    expect(store.list(10, { asset: 'ZCHF' }).map((row) => row.externalId)).toEqual([
+      'store-2',
+      'store-1',
+    ]);
     store.close();
     expect(store.list(10)).toHaveLength(0);
     expect(later.created).toBe(true);
@@ -151,7 +157,7 @@ describe('MemoryMapPlaceStore', () => {
     expect(listed[0]?.country).toBe('CH');
   });
 
-  it('lists SPAR shop names and others without null brands', () => {
+  it('lists SPAR shop names and treats a missing brand as others', () => {
     let tick = 0;
     const store = new MemoryMapPlaceStore(() => new Date(Date.UTC(2026, 0, 1, 0, 0, tick++)));
     store.insertIfNew({ ...input, externalId: 'spar-brand', shopName: 'SPAR' });
@@ -160,8 +166,61 @@ describe('MemoryMapPlaceStore', () => {
     const spar = store.list(10, { shopName: 'SPAR' });
     expect(spar.map((row) => row.externalId)).toEqual(['spar-brand']);
     const others = store.list(10, { shopName: 'others' });
-    expect(others.map((row) => row.externalId)).toEqual(['migros']);
-    expect(others.every((row) => row.shopName !== null && row.shopName !== 'SPAR')).toBe(true);
+    expect(others.map((row) => row.externalId)).toEqual(['none', 'migros']);
+    expect(others.every((row) => row.shopName !== 'SPAR')).toBe(true);
+  });
+
+  it('uses the payment-link catalog when a pin has no support rows', () => {
+    const store = new MemoryMapPlaceStore(() => new Date('2026-09-26T00:00:00.000Z'));
+    store.insertIfNew({ ...input, externalId: 'dfx-open' });
+    store.insertIfNew({
+      ...input,
+      origin: '21gifts',
+      externalId: 'gifts-open',
+      techProvider: '21.gifts',
+    });
+    store.insertIfNew({
+      ...input,
+      origin: '21gifts',
+      externalId: 'origin-only',
+    });
+    store.insertIfNew({
+      ...input,
+      externalId: 'label-only',
+      techProvider: '21.gifts',
+    });
+    store.insertIfNew({
+      ...input,
+      externalId: 'stated',
+      supports: [{ blockchain: 'Polygon', asset: 'ZCHF' }],
+    });
+    const ids = (filter: {
+      blockchain?: string;
+      asset?: string;
+      shopName?: 'SPAR' | 'others';
+    }): string[] => store.list(10, filter).map((row) => row.externalId);
+
+    expect(ids({ blockchain: 'Ethereum' }).sort()).toEqual(['dfx-open']);
+    expect(ids({ blockchain: 'Lightning', asset: 'BTC' }).sort()).toEqual([
+      'dfx-open',
+      'gifts-open',
+      'label-only',
+      'origin-only',
+    ]);
+    expect(ids({ blockchain: 'Ethereum', asset: 'BTC' })).toEqual([]);
+    expect(ids({ blockchain: 'Plasma' })).toEqual([]);
+    expect(ids({ blockchain: 'BinancePay' }).sort()).toEqual(['dfx-open']);
+    expect(ids({ asset: 'ckBTC' }).sort()).toEqual(['dfx-open']);
+    expect(ids({ blockchain: 'Bitcoin' }).sort()).toEqual(['dfx-open']);
+    expect(ids({ blockchain: 'Polygon', asset: 'ZCHF' }).sort()).toEqual(['dfx-open', 'stated']);
+    expect(ids({ shopName: 'SPAR' })).toEqual([]);
+    expect(ids({ shopName: 'others' }).sort()).toEqual([
+      'dfx-open',
+      'gifts-open',
+      'label-only',
+      'origin-only',
+      'stated',
+    ]);
   });
 
   it('requires blockchain and asset to match the same support row', () => {

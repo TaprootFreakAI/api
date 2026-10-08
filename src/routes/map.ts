@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { pushMapPlace, type FetchLike, type MapPushResult } from '@/lib/map/btcmap';
+import { publicFilterResponse } from '@/lib/map/filter-catalog';
 import {
   normalizeMapPlace,
   normalizeMapPlaceFilter,
@@ -105,12 +106,7 @@ export function mapRoutes(deps: MapRouteDeps): Hono {
       return c.json({ error: parsed.error }, 400);
     }
     const values = deps.store.filters(parsed.value.blockchain);
-    return c.json({
-      shopNames: ['SPAR', 'others'],
-      countries: values.countries,
-      blockchains: values.blockchains,
-      assets: values.assets,
-    });
+    return c.json(publicFilterResponse(values, parsed.value.blockchain));
   });
 
   app.post('/places', async (c) => {

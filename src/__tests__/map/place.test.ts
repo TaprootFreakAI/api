@@ -430,6 +430,22 @@ describe('normalizeMapPlaceFilter', () => {
       ok: true,
       value: { shopName: 'others' },
     });
+    expect(normalizeMapPlaceFilter(undefined, undefined, ' BinancePay ', ' ckBTC ')).toEqual({
+      ok: true,
+      value: { blockchain: 'BinancePay', asset: 'ckBTC' },
+    });
+    expect(normalizeMapPlaceFilter(undefined, undefined, 'KucoinPay', 'USDC.e')).toEqual({
+      ok: true,
+      value: { blockchain: 'KucoinPay', asset: 'USDC.e' },
+    });
+    expect(normalizeMapPlaceFilter(undefined, undefined, undefined, 'USDbC')).toEqual({
+      ok: true,
+      value: { asset: 'USDbC' },
+    });
+    expect(normalizeMapPlaceFilter(undefined, undefined, undefined, 'ZCHF')).toEqual({
+      ok: true,
+      value: { asset: 'ZCHF' },
+    });
   });
 
   it('rejects a bad country, shop name, blockchain, or asset query', () => {
