@@ -175,14 +175,15 @@ function supportSql(
       params: [blockchain],
     };
   }
-  if (asset !== undefined) {
-    return {
-      sql: 'id IN (SELECT place_id FROM map_place_support WHERE asset = ?)',
-      params: [asset],
-    };
+  /* v8 ignore start -- @preserve a matching offer always names a blockchain or an asset */
+  if (asset === undefined) {
+    return { sql: '0', params: [] };
   }
-  /* v8 ignore next -- @preserve a matching offer always names a blockchain or an asset */
-  return { sql: '0', params: [] };
+  /* v8 ignore stop -- @preserve */
+  return {
+    sql: 'id IN (SELECT place_id FROM map_place_support WHERE asset = ?)',
+    params: [asset],
+  };
 }
 
 function assetsFor(blockchain: string | undefined): string[] {

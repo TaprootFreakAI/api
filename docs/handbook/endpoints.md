@@ -10,14 +10,14 @@
 ## Endpoint: GET /map/places
 
 - **Purpose:** Public map list, newest first. Each item is `id`, `origin`, `name`, `lat`, `lon`, `category`, `techProvider`, `country`, `shopName`, and `supports`. `country` is the stored DFX country symbol or null. `shopName` is the stored brand or null. `supports` is the stored blockchain and asset pairs, sorted. The caller id and payment methods are not included. Omitted `origin` is every pin. A present `origin` must be the same token as a stored origin. Optional `country`, `shopName` (`SPAR` or `others`), `blockchain`, and `asset` further restrict the store read. All predicates are AND and run before `limit`. `country` is a stored column, not inferred from an address. `others` includes a pin with no brand. A pin that already has support rows matches only those rows. A pin with none matches the hardcoded payment-link catalog: origin `21gifts` or tech provider `21.gifts` matches Lightning and BTC only, and every other pin matches a catalog network, asset, or pair.
-- **Errors:** 400 `{ error: "Invalid limit" }` when `limit` is not an integer from 1 to 1000. Omitted `limit` means 1000. 400 `{ error: "Place origin is invalid" }` when `origin` is present but not a valid origin token. 400 `{ error: "Place country is invalid" }` when `country` is present but not an assigned ISO 3166-1 alpha-2 DFX country symbol. 400 `{ error: "Place shop name is invalid" }` when `shopName` is present and not `SPAR` or `others`. 400 `{ error: "Place support is invalid" }` when `blockchain` or `asset` is present but not a payment-link or stored payment-network name, or not a payment-link asset name.
+- **Errors:** 400 `{ error: "Invalid limit" }` when `limit` is not an integer from 1 to 1000. Omitted `limit` means 1000. 400 `{ error: "Place origin is invalid" }` when `origin` is present but not a valid origin token. 400 `{ error: "Place country is invalid" }` when `country` is present but not an assigned ISO 3166-1 alpha-2 DFX country symbol. 400 `{ error: "Place shop name is invalid" }` when `shopName` is present and not `SPAR` or `others`. 400 `{ error: "Place support is invalid" }` when `blockchain` is present but not a payment-link or stored payment-network name, or when `asset` is present but not a ticker, a prefixed ticker, or a payment-link catalog name.
 - **Used by:** The OpenCryptoPay map.
 - **Auth:** none. Browser calls are allowed from any origin.
 
 ## Endpoint: GET /map/filters
 
 - **Purpose:** Public list of filter values for the map. `shopNames` is always exactly `["SPAR", "others"]`. `countries` are the distinct stored ISO country codes, sorted. `blockchains` and `assets` are the hardcoded payment-link catalog plus distinct stored values, sorted. `?blockchain=` limits the top-level `assets` to that chain and still returns every blockchain. `techProviders` lists the full hardcoded offer for `DFX.swiss` and for `21.gifts` (Lightning and BTC only) and is not narrowed by `?blockchain=`.
-- **Errors:** 400 `{ error: "Place support is invalid" }` when `blockchain` is present but not a DFX payment-network name.
+- **Errors:** 400 `{ error: "Place support is invalid" }` when `blockchain` is present but not a payment-link or stored payment-network name.
 - **Used by:** The OpenCryptoPay map filter UI.
 - **Auth:** none. Browser calls are allowed from any origin.
 
