@@ -23,6 +23,15 @@ describe('normalizePlaceOrigin', () => {
     expect(normalizePlaceOrigin(' spar ')).toEqual({ ok: true, value: 'spar' });
   });
 
+  it('trims an origin that starts with a digit', () => {
+    expect(normalizePlaceOrigin(' 21gifts ')).toEqual({ ok: true, value: '21gifts' });
+  });
+
+  it('accepts a 32-character origin that starts with a digit', () => {
+    const origin = '2' + 'a'.repeat(31);
+    expect(normalizePlaceOrigin(origin)).toEqual({ ok: true, value: origin });
+  });
+
   it('rejects SPAR and any other invalid value', () => {
     expect(normalizePlaceOrigin('SPAR')).toEqual({
       ok: false,
@@ -33,6 +42,26 @@ describe('normalizePlaceOrigin', () => {
       error: 'Place origin is invalid',
     });
     expect(normalizePlaceOrigin('')).toEqual({
+      ok: false,
+      error: 'Place origin is invalid',
+    });
+    expect(normalizePlaceOrigin('2' + 'a'.repeat(32))).toEqual({
+      ok: false,
+      error: 'Place origin is invalid',
+    });
+    expect(normalizePlaceOrigin('-a')).toEqual({
+      ok: false,
+      error: 'Place origin is invalid',
+    });
+    expect(normalizePlaceOrigin('21.gifts')).toEqual({
+      ok: false,
+      error: 'Place origin is invalid',
+    });
+    expect(normalizePlaceOrigin('21Gifts')).toEqual({
+      ok: false,
+      error: 'Place origin is invalid',
+    });
+    expect(normalizePlaceOrigin('   ')).toEqual({
       ok: false,
       error: 'Place origin is invalid',
     });

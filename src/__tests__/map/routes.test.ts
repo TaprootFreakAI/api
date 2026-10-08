@@ -86,6 +86,59 @@ describe('map routes', () => {
     expect(all.places.map((row) => row.origin).sort()).toEqual(['dfx', 'spar']);
   });
 
+  it('accepts origin 21gifts on PUT and GET and rejects a leading hyphen or uppercase', async () => {
+    const api = app({ token: 'secret' });
+    const created = await api.request('/map/places', {
+      method: 'PUT',
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        origin: '21gifts',
+        externalId: 'shop-1',
+        name: 'Shop',
+        lat: 14.620311,
+        lon: 120.959626,
+        category: 'shopping',
+        paymentMethods: 'lightning',
+        techProvider: '21.gifts',
+      }),
+    });
+    expect(created.status).toBe(201);
+    const createdJson = (await created.json()) as { created: boolean };
+    expect(createdJson.created).toBe(true);
+    const listed = await api.request('/map/places?origin=21gifts');
+    expect(listed.status).toBe(200);
+    const listedJson = (await listed.json()) as {
+      places: Array<{ origin: string; name: string; category: string; techProvider: string }>;
+    };
+    expect(listedJson.places).toHaveLength(1);
+    expect(listedJson.places[0]?.origin).toBe('21gifts');
+    expect(listedJson.places[0]?.name).toBe('Shop');
+    expect(listedJson.places[0]?.category).toBe('shopping');
+    expect(listedJson.places[0]?.techProvider).toBe('21.gifts');
+    const hyphen = await api.request('/map/places?origin=-21gifts');
+    expect(hyphen.status).toBe(400);
+    expect(await hyphen.json()).toEqual({ error: 'Place origin is invalid' });
+    const uppercase = await api.request('/map/places?origin=21Gifts');
+    expect(uppercase.status).toBe(400);
+    expect(await uppercase.json()).toEqual({ error: 'Place origin is invalid' });
+    const putHyphen = await api.request('/map/places', {
+      method: 'PUT',
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        origin: '-21gifts',
+        externalId: 'shop-2',
+        name: 'Shop',
+        lat: 14.620311,
+        lon: 120.959626,
+        category: 'shopping',
+        paymentMethods: 'lightning',
+        techProvider: '21.gifts',
+      }),
+    });
+    expect(putHyphen.status).toBe(400);
+    expect(await putHyphen.json()).toEqual({ error: 'Place origin is invalid' });
+  });
+
   it('rejects a bad limit', async () => {
     const api = app({});
     expect((await api.request('/map/places?limit=0')).status).toBe(400);
