@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createApp } from '@/server';
+import { publicFilterResponse } from '@/lib/map/filter-catalog';
 import { MemoryMapPlaceStore } from '@/lib/map/store';
+import { createApp } from '@/server';
 
 const body = {
   origin: 'dfx',
@@ -41,12 +42,9 @@ describe('map routes', () => {
     expect(one.status).toBe(200);
     const filters = await api.request('/map/filters');
     expect(filters.status).toBe(200);
-    expect(await filters.json()).toEqual({
-      shopNames: ['SPAR', 'others'],
-      countries: [],
-      blockchains: [],
-      assets: [],
-    });
+    expect(await filters.json()).toEqual(
+      publicFilterResponse({ countries: [], blockchains: [], assets: [] }),
+    );
   });
 
   it('filters GET /map/places by origin and rejects SPAR', async () => {
@@ -527,20 +525,25 @@ describe('map routes', () => {
     expect(created.status).toBe(201);
     const filters = await api.request('/map/filters');
     expect(filters.status).toBe(200);
-    expect(await filters.json()).toEqual({
-      shopNames: ['SPAR', 'others'],
-      countries: ['CH'],
-      blockchains: ['Ethereum', 'Polygon'],
-      assets: ['ETH', 'ZCHF'],
-    });
+    expect(await filters.json()).toEqual(
+      publicFilterResponse({
+        countries: ['CH'],
+        blockchains: ['Ethereum', 'Polygon'],
+        assets: ['ETH', 'ZCHF'],
+      }),
+    );
     const ethereum = await api.request('/map/filters?blockchain=Ethereum');
     expect(ethereum.status).toBe(200);
-    expect(await ethereum.json()).toEqual({
-      shopNames: ['SPAR', 'others'],
-      countries: ['CH'],
-      blockchains: ['Ethereum', 'Polygon'],
-      assets: ['ZCHF'],
-    });
+    expect(await ethereum.json()).toEqual(
+      publicFilterResponse(
+        {
+          countries: ['CH'],
+          blockchains: ['Ethereum', 'Polygon'],
+          assets: ['ZCHF'],
+        },
+        'Ethereum',
+      ),
+    );
     const bad = await api.request('/map/filters?blockchain=ethereum');
     expect(bad.status).toBe(400);
     expect(await bad.json()).toEqual({ error: 'Place support is invalid' });

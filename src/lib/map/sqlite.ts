@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite';
+import { unstatedPaymentSql } from '@/lib/map/filter-catalog';
 import type { MapPlaceInput, MapPlaceSupport, StoredMapPlace } from '@/lib/map/place';
 import { MAP_PLACE_SCHEMA_SQL, type MapPlaceListFilter, type MapPlaceStore } from '@/lib/map/store';
 
@@ -337,20 +338,26 @@ export class SqliteMapPlaceStore implements MapPlaceStore {
       where.push('shop_name = ?');
       params.push('SPAR');
     } else if (filter?.shopName === 'others') {
-      where.push('shop_name IS NOT NULL AND shop_name <> ?');
+      where.push('(shop_name IS NULL OR shop_name <> ?)');
       params.push('SPAR');
     }
-    if (filter !== undefined && filter.blockchain !== undefined && filter.asset !== undefined) {
-      where.push(
-        'id IN (SELECT place_id FROM map_place_support WHERE blockchain = ? AND asset = ?)',
-      );
-      params.push(filter.blockchain, filter.asset);
-    } else if (filter !== undefined && filter.blockchain !== undefined) {
-      where.push('id IN (SELECT place_id FROM map_place_support WHERE blockchain = ?)');
-      params.push(filter.blockchain);
-    } else if (filter !== undefined && filter.asset !== undefined) {
-      where.push('id IN (SELECT place_id FROM map_place_support WHERE asset = ?)');
-      params.push(filter.asset);
+    if (filter !== undefined && (filter.blockchain !== undefined || filter.asset !== undefined)) {
+      const payment = unstatedPaymentSql(filter.blockchain, filter.asset);
+      if (payment !== null) {
+        where.push(payment.sql);
+        params.push(...payment.params);
+      } else if (filter.blockchain !== undefined && filter.asset !== undefined) {
+        where.push(
+          'id IN (SELECT place_id FROM map_place_support WHERE blockchain = ? AND asset = ?)',
+        );
+        params.push(filter.blockchain, filter.asset);
+      } else if (filter.blockchain !== undefined) {
+        where.push('id IN (SELECT place_id FROM map_place_support WHERE blockchain = ?)');
+        params.push(filter.blockchain);
+      } else if (filter.asset !== undefined) {
+        where.push('id IN (SELECT place_id FROM map_place_support WHERE asset = ?)');
+        params.push(filter.asset);
+      }
     }
     const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
     const rows = this.#db

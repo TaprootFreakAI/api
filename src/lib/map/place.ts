@@ -3,6 +3,8 @@
  * Coordinates are rounded to six decimal places.
  */
 
+import { isCatalogAsset, isCatalogBlockchain } from '@/lib/map/filter-catalog';
+
 export type MapPlaceSupport = {
   blockchain: string;
   asset: string;
@@ -507,6 +509,26 @@ function normalizeAsset(raw: unknown): { ok: true; value: string } | { ok: false
   return { ok: true, value: asset };
 }
 
+function normalizeQueryBlockchain(
+  raw: string,
+): { ok: true; value: string } | { ok: false; error: string } {
+  const blockchain = raw.trim();
+  if (!PAYMENT_BLOCKCHAINS.has(blockchain) && !isCatalogBlockchain(blockchain)) {
+    return { ok: false, error: SUPPORT_ERROR };
+  }
+  return { ok: true, value: blockchain };
+}
+
+function normalizeQueryAsset(
+  raw: string,
+): { ok: true; value: string } | { ok: false; error: string } {
+  const asset = raw.trim();
+  if (!ASSET_TICKER.test(asset) && !ASSET_PREFIXED.test(asset) && !isCatalogAsset(asset)) {
+    return { ok: false, error: SUPPORT_ERROR };
+  }
+  return { ok: true, value: asset };
+}
+
 function normalizeSupports(
   raw: unknown,
 ): { ok: true; value: MapPlaceSupport[] } | { ok: false; error: string } {
@@ -714,14 +736,14 @@ export function normalizeMapPlaceFilter(
     value.shopName = parsed.value;
   }
   if (blockchain !== undefined) {
-    const parsed = normalizeBlockchain(blockchain);
+    const parsed = normalizeQueryBlockchain(blockchain);
     if (!parsed.ok) {
       return parsed;
     }
     value.blockchain = parsed.value;
   }
   if (asset !== undefined) {
-    const parsed = normalizeAsset(asset);
+    const parsed = normalizeQueryAsset(asset);
     if (!parsed.ok) {
       return parsed;
     }

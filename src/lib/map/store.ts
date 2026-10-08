@@ -1,3 +1,4 @@
+import { matchesUnstatedPayment } from '@/lib/map/filter-catalog';
 import type {
   MapPlaceInput,
   MapPlaceQueryFilter,
@@ -94,15 +95,18 @@ function matchesFilter(row: StoredMapPlace, filter?: MapPlaceListFilter): boolea
   if (filter.shopName === 'SPAR' && row.shopName !== 'SPAR') {
     return false;
   }
-  if (filter.shopName === 'others' && (row.shopName === null || row.shopName === 'SPAR')) {
+  if (filter.shopName === 'others' && row.shopName === 'SPAR') {
     return false;
   }
   if (filter.blockchain !== undefined || filter.asset !== undefined) {
-    const match = row.supports.some(
-      (item) =>
-        (filter.blockchain === undefined || item.blockchain === filter.blockchain) &&
-        (filter.asset === undefined || item.asset === filter.asset),
-    );
+    const match =
+      row.supports.length > 0
+        ? row.supports.some(
+            (item) =>
+              (filter.blockchain === undefined || item.blockchain === filter.blockchain) &&
+              (filter.asset === undefined || item.asset === filter.asset),
+          )
+        : matchesUnstatedPayment(row.origin, row.techProvider, filter.blockchain, filter.asset);
     if (!match) {
       return false;
     }
