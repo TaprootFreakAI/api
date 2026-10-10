@@ -21,9 +21,10 @@ describe('payment-link filter catalog', () => {
 
     expect(isCatalogAsset('ZCHF')).toBe(true);
     expect(isCatalogAsset('ckBTC')).toBe(true);
-    expect(isCatalogAsset('USDC.e')).toBe(true);
-    expect(isCatalogAsset('USDbC')).toBe(true);
     expect(isCatalogAsset('dEURO')).toBe(true);
+    expect(isCatalogAsset('USDC.e')).toBe(false);
+    expect(isCatalogAsset('USDbC')).toBe(false);
+    expect(isCatalogAsset('AAVE')).toBe(false);
     expect(isCatalogAsset('XPL')).toBe(false);
     expect(isCatalogAsset('ckbtc')).toBe(false);
   });
@@ -33,6 +34,9 @@ describe('payment-link filter catalog', () => {
     expect(matchesUnstatedPayment('dfx', 'DFX.swiss', 'Ethereum', undefined)).toBe(true);
     expect(matchesUnstatedPayment('dfx', 'DFX.swiss', 'Ethereum', 'ZCHF')).toBe(true);
     expect(matchesUnstatedPayment('dfx', 'DFX.swiss', 'Ethereum', 'BTC')).toBe(false);
+    expect(matchesUnstatedPayment('dfx', 'DFX.swiss', 'Polygon', 'ZCHF')).toBe(true);
+    expect(matchesUnstatedPayment('dfx', 'DFX.swiss', 'Arbitrum', 'AAVE')).toBe(false);
+    expect(matchesUnstatedPayment('dfx', 'DFX.swiss', 'Gnosis', 'xDAI')).toBe(false);
     expect(matchesUnstatedPayment('dfx', 'DFX.swiss', 'Plasma', undefined)).toBe(false);
     expect(matchesUnstatedPayment('dfx', 'DFX.swiss', 'BinancePay', undefined)).toBe(true);
     expect(matchesUnstatedPayment('dfx', 'DFX.swiss', undefined, 'ckBTC')).toBe(true);
@@ -91,7 +95,7 @@ describe('payment-link filter catalog', () => {
     );
     expect(ethereum.assets).toContain('AAAA');
     expect(ethereum.assets).toContain('ZCHF');
-    expect(ethereum.assets).toContain('ONDO');
+    expect(ethereum.assets).not.toContain('ONDO');
     expect(ethereum.assets).not.toContain('BTC');
     expect(ethereum.blockchains).toContain('Plasma');
 
@@ -109,7 +113,10 @@ describe('payment-link filter catalog', () => {
     expect(dfx?.blockchains).toContain('Zano');
     expect(dfx?.assets).not.toContain('XPL');
     expect(dfx?.pairs).toContainEqual({ blockchain: 'Ethereum', asset: 'ZCHF' });
+    expect(dfx?.pairs).toContainEqual({ blockchain: 'Polygon', asset: 'ZCHF' });
     expect(dfx?.pairs).not.toContainEqual({ blockchain: 'Ethereum', asset: 'BTC' });
+    expect(dfx?.pairs).not.toContainEqual({ blockchain: 'Arbitrum', asset: 'AAVE' });
+    expect(dfx?.pairs).not.toContainEqual({ blockchain: 'Gnosis', asset: 'xDAI' });
     expect(dfx?.pairs).not.toContainEqual({ blockchain: 'Arkade', asset: 'BTC' });
     expect(gifts).toEqual({
       name: '21.gifts',

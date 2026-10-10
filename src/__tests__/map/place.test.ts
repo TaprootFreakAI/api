@@ -436,14 +436,6 @@ describe('normalizeMapPlaceFilter', () => {
       ok: true,
       value: { blockchain: 'BinancePay', asset: 'ckBTC' },
     });
-    expect(normalizeMapPlaceFilter(undefined, undefined, 'KucoinPay', 'USDC.e')).toEqual({
-      ok: true,
-      value: { blockchain: 'KucoinPay', asset: 'USDC.e' },
-    });
-    expect(normalizeMapPlaceFilter(undefined, undefined, undefined, 'USDbC')).toEqual({
-      ok: true,
-      value: { asset: 'USDbC' },
-    });
     expect(normalizeMapPlaceFilter(undefined, undefined, undefined, 'ZCHF')).toEqual({
       ok: true,
       value: { asset: 'ZCHF' },
@@ -472,6 +464,14 @@ describe('normalizeMapPlaceFilter', () => {
       error: 'Place support is invalid',
     });
     expect(normalizeMapPlaceFilter(undefined, undefined, undefined, 'Ethereum/ZCHF')).toEqual({
+      ok: false,
+      error: 'Place support is invalid',
+    });
+    expect(normalizeMapPlaceFilter(undefined, undefined, 'KucoinPay', 'USDC.e')).toEqual({
+      ok: false,
+      error: 'Place support is invalid',
+    });
+    expect(normalizeMapPlaceFilter(undefined, undefined, undefined, 'USDbC')).toEqual({
       ok: false,
       error: 'Place support is invalid',
     });

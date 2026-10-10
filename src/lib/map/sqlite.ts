@@ -122,6 +122,78 @@ function mapOne(db: Database, row: MapPlaceRow): StoredMapPlace {
   return place;
 }
 
+const LI_POSTAL_CODES: ReadonlySet<string> = new Set([
+  '9485',
+  '9486',
+  '9487',
+  '9488',
+  '9490',
+  '9491',
+  '9492',
+  '9493',
+  '9494',
+  '9495',
+  '9496',
+  '9497',
+  '9498',
+]);
+
+const GIFTS_COUNTRY_BY_EXACT_NAME: ReadonlyMap<string, string> = new Map([
+  ['Happyland Court Barangay 105 Tondo, Manila', 'PH'],
+  ['Rose st.Happyland Barangay 105 Tondo,Manila', 'PH'],
+  ['Machakos Bitcoin Academy', 'KE'],
+  ['bitcoinmakueni', 'KE'],
+]);
+
+function lastFourDigitWord(name: string): string | undefined {
+  let found: string | undefined;
+  for (const word of name.split(/\s+/)) {
+    if (/^[0-9]{4}$/.test(word)) {
+      found = word;
+    }
+  }
+  return found;
+}
+
+function countryFromSparName(name: string): 'LI' | 'CH' | undefined {
+  const code = lastFourDigitWord(name);
+  if (code === undefined) {
+    return undefined;
+  }
+  if (LI_POSTAL_CODES.has(code)) {
+    return 'LI';
+  }
+  const numeric = Number(code);
+  if (numeric >= 1000 && numeric <= 9999) {
+    return 'CH';
+  }
+  return undefined;
+}
+
+function backfillMissingCountry(db: Database): void {
+  const rows = db
+    .query(
+      `SELECT id, origin, name
+       FROM map_place
+       WHERE country IS NULL AND (origin = 'spar' OR origin = '21gifts')`,
+    )
+    .all() as Array<{ id: string; origin: string; name: string }>;
+  const update = db.query('UPDATE map_place SET country = ? WHERE id = ? AND country IS NULL');
+  for (const row of rows) {
+    let country: string | undefined;
+    if (row.origin === 'spar') {
+      country = countryFromSparName(row.name);
+    } else if (row.origin === '21gifts') {
+      country = GIFTS_COUNTRY_BY_EXACT_NAME.get(row.name);
+    } else {
+      throw new Error('country backfill unexpected origin');
+    }
+    if (country !== undefined) {
+      update.run(country, row.id);
+    }
+  }
+}
+
 function insertSupportRows(db: Database, placeId: string, supports: MapPlaceSupport[]): void {
   const insert = db.query(
     'INSERT INTO map_place_support (place_id, blockchain, asset) VALUES (?, ?, ?)',
@@ -139,7 +211,8 @@ function replaceSupportRows(db: Database, placeId: string, supports: MapPlaceSup
 /**
  * SQLite {@link MapPlaceStore}. Opened by the process entrypoint.
  * Insert, list, and delete are exercised by the HTTP end-to-end run.
- * The SPAR shop-name backfill is exercised by e2e/sqlite-backfill.ts.
+ * The SPAR shop-name backfill and the country backfill (null country only)
+ * are exercised by e2e/sqlite-backfill.ts.
  */
 export class SqliteMapPlaceStore implements MapPlaceStore {
   readonly #db: Database;
@@ -178,6 +251,7 @@ export class SqliteMapPlaceStore implements MapPlaceStore {
     this.#db.exec(
       "UPDATE map_place SET shop_name = 'SPAR' WHERE origin = 'spar' AND shop_name IS NULL",
     );
+    backfillMissingCountry(this.#db);
   }
 
   /**

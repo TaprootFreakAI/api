@@ -16,7 +16,7 @@
 
 ## Function: normalizeMapPlaceFilter
 
-- **Purpose:** Validate the optional `country`, `shopName`, `blockchain`, and `asset` query strings for the public map. Omitted parameters stay off the filter. `country` is trimmed and uppercased. `shopName` is trimmed and must be `SPAR` or `others`. `blockchain` and `asset` are trimmed and not casefolded. A filter blockchain may be a stored payment-network name or a payment-link network such as BinancePay or KucoinPay. A filter asset may be a ticker, a prefixed ticker, or a catalog name such as ckBTC, USDC.e, or USDbC. A support body still uses the stricter stored-pair rules.
+- **Purpose:** Validate the optional `country`, `shopName`, `blockchain`, and `asset` query strings for the public map. Omitted parameters stay off the filter. `country` is trimmed and uppercased. `shopName` is trimmed and must be `SPAR` or `others`. `blockchain` and `asset` are trimmed and not casefolded. A filter blockchain may be a stored payment-network name or a payment-link network such as BinancePay or KucoinPay. A filter asset may be a ticker, a prefixed ticker, or a catalog name such as ckBTC or dEURO. A support body still uses the stricter stored-pair rules.
 - **Inputs:** Four optional raw query strings.
 - **Returns / side effects:** `{ ok: true, value }` with the present filter fields, or `{ ok: false, error }` with `Place country is invalid`, `Place shop name is invalid`, or `Place support is invalid`. No I/O.
 - **Used by:** `mapRoutes` on `GET /map/places` and `GET /map/filters`.
@@ -30,7 +30,7 @@
 
 ## Function: isCatalogAsset
 
-- **Purpose:** Report whether a trimmed asset query is in the hardcoded payment-link catalog. This includes names that are not plain tickers, such as ckBTC, USDC.e, and USDbC.
+- **Purpose:** Report whether a trimmed asset query is in the hardcoded payment-link catalog. This includes names that are not plain tickers, such as ckBTC and dEURO.
 - **Inputs:** A trimmed asset string.
 - **Returns / side effects:** True or false. No I/O.
 - **Used by:** `normalizeMapPlaceFilter` when an asset query is not a ticker or a prefixed ticker.
@@ -93,7 +93,7 @@
 
 ## Function: SqliteMapPlaceStore
 
-- **Purpose:** SQLite driver for map pins. The schema is `MAP_PLACE_SCHEMA_SQL`. Opening an older file adds `tech_provider`, `country`, `shop_name`, and `last_transaction_at` when those columns are missing, creates `map_place_support` and its indexes if missing, and backfills `shop_name` to SPAR for origin `spar` when that column is null. New rows store `last_transaction_at` null. An upsert and a repeat insert do not clear the timestamp. A conflicting insert does not overwrite the first row.
+- **Purpose:** SQLite driver for map pins. The schema is `MAP_PLACE_SCHEMA_SQL`. Opening an older file adds `tech_provider`, `country`, `shop_name`, and `last_transaction_at` when those columns are missing, creates `map_place_support` and its indexes if missing, and backfills `shop_name` to SPAR for origin `spar` when that column is null. It also sets a null country from the last four-digit word in a SPAR name, or from four known shop names, and does not replace a country that is already stored. New rows store `last_transaction_at` null. An upsert and a repeat insert do not clear the timestamp. A conflicting insert does not overwrite the first row.
 - **Inputs:** Constructor takes a SQLite filename or `:memory:`. `upsert`, `recordTransaction`, and `deleteByKey` use the same origin and external id pair as insert. `list` takes a positive limit and an optional filter object. Predicates are AND and apply before sort and limit. A pin with no support rows uses the same hardcoded payment-link catalog as the memory store. SQLite binds every value. `filters` takes an optional blockchain.
 - **Returns / side effects:** Opens the file, enables foreign keys, applies the schema, and implements `MapPlaceStore`. `recordTransaction` updates only `last_transaction_at` with the same rules as the memory store. An unparseable `occurredAt` does not change the row. A written instant is `new Date(newMs).toISOString()`. Present filter fields are AND-ed before the sort and the limit. Deleting a pin deletes its support rows. `close` closes the handle.
 - **Used by:** The process entrypoint. The HTTP end-to-end run exercises it.

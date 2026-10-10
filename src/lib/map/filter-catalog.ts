@@ -1,7 +1,8 @@
 /**
  * Temporary payment-link filter catalog.
  * Networks are those offered for payment links, without test networks and
- * without Plasma. Assets are the sellable names on those networks.
+ * without Plasma. Assets are the payment-enabled names on those networks,
+ * not the sellable names.
  * 21.gifts is Lightning and BTC only. Replace this module when the offer
  * is read from the payment service.
  */
@@ -34,60 +35,32 @@ const DFX_BLOCKCHAINS: readonly string[] = [
 ];
 
 const DFX_PAIRS: readonly { blockchain: string; asset: string }[] = [
-  { blockchain: 'Arbitrum', asset: 'AAVE' },
-  { blockchain: 'Arbitrum', asset: 'ARB' },
   { blockchain: 'Arbitrum', asset: 'ETH' },
-  { blockchain: 'Arbitrum', asset: 'GMX' },
-  { blockchain: 'Arbitrum', asset: 'LINK' },
-  { blockchain: 'Arbitrum', asset: 'UNI' },
   { blockchain: 'Arbitrum', asset: 'USDC' },
-  { blockchain: 'Arbitrum', asset: 'USDC.e' },
   { blockchain: 'Arbitrum', asset: 'USDT' },
   { blockchain: 'Arbitrum', asset: 'WBTC' },
   { blockchain: 'Arbitrum', asset: 'dEURO' },
-  { blockchain: 'Base', asset: 'DEPS' },
   { blockchain: 'Base', asset: 'ETH' },
   { blockchain: 'Base', asset: 'USDC' },
-  { blockchain: 'Base', asset: 'USDbC' },
   { blockchain: 'Base', asset: 'dEURO' },
-  { blockchain: 'BinanceSmartChain', asset: 'AAVE' },
+  { blockchain: 'BinancePay', asset: 'USDT' },
   { blockchain: 'BinanceSmartChain', asset: 'BNB' },
-  { blockchain: 'BinanceSmartChain', asset: 'BTCB' },
-  { blockchain: 'BinanceSmartChain', asset: 'ETH' },
   { blockchain: 'BinanceSmartChain', asset: 'USDC' },
   { blockchain: 'BinanceSmartChain', asset: 'USDT' },
   { blockchain: 'Bitcoin', asset: 'BTC' },
   { blockchain: 'Cardano', asset: 'ADA' },
-  { blockchain: 'Ethereum', asset: 'AAVE' },
-  { blockchain: 'Ethereum', asset: 'APE' },
-  { blockchain: 'Ethereum', asset: 'ARB' },
-  { blockchain: 'Ethereum', asset: 'BBTC' },
-  { blockchain: 'Ethereum', asset: 'CRV' },
-  { blockchain: 'Ethereum', asset: 'DEPS' },
-  { blockchain: 'Ethereum', asset: 'EDLC' },
   { blockchain: 'Ethereum', asset: 'ETH' },
-  { blockchain: 'Ethereum', asset: 'EURC' },
-  { blockchain: 'Ethereum', asset: 'FPS' },
-  { blockchain: 'Ethereum', asset: 'LINK' },
-  { blockchain: 'Ethereum', asset: 'ONDO' },
-  { blockchain: 'Ethereum', asset: 'POL' },
-  { blockchain: 'Ethereum', asset: 'QNT' },
-  { blockchain: 'Ethereum', asset: 'REALU' },
-  { blockchain: 'Ethereum', asset: 'SNX' },
   { blockchain: 'Ethereum', asset: 'USDC' },
   { blockchain: 'Ethereum', asset: 'USDT' },
   { blockchain: 'Ethereum', asset: 'WBTC' },
-  { blockchain: 'Ethereum', asset: 'WFPS' },
   { blockchain: 'Ethereum', asset: 'ZCHF' },
   { blockchain: 'Ethereum', asset: 'dEURO' },
-  { blockchain: 'Ethereum', asset: 'kBTC' },
-  { blockchain: 'Ethereum', asset: 'nDEPS' },
   { blockchain: 'Firo', asset: 'FIRO' },
-  { blockchain: 'Gnosis', asset: 'xDAI' },
   { blockchain: 'InternetComputer', asset: 'ICP' },
   { blockchain: 'InternetComputer', asset: 'VCHF' },
   { blockchain: 'InternetComputer', asset: 'VEUR' },
   { blockchain: 'InternetComputer', asset: 'ckBTC' },
+  { blockchain: 'KucoinPay', asset: 'USDT' },
   { blockchain: 'Lightning', asset: 'BTC' },
   { blockchain: 'Monero', asset: 'XMR' },
   { blockchain: 'Optimism', asset: 'ETH' },
@@ -95,17 +68,11 @@ const DFX_PAIRS: readonly { blockchain: string; asset: string }[] = [
   { blockchain: 'Optimism', asset: 'USDT' },
   { blockchain: 'Optimism', asset: 'WBTC' },
   { blockchain: 'Optimism', asset: 'dEURO' },
-  { blockchain: 'Polygon', asset: 'DEPS' },
-  { blockchain: 'Polygon', asset: 'DGC' },
-  { blockchain: 'Polygon', asset: 'DSC' },
-  { blockchain: 'Polygon', asset: 'EURS' },
   { blockchain: 'Polygon', asset: 'POL' },
-  { blockchain: 'Polygon', asset: 'SAND' },
   { blockchain: 'Polygon', asset: 'USDC' },
-  { blockchain: 'Polygon', asset: 'USDC.e' },
   { blockchain: 'Polygon', asset: 'USDT' },
   { blockchain: 'Polygon', asset: 'WBTC' },
-  { blockchain: 'Polygon', asset: 'WFPS' },
+  { blockchain: 'Polygon', asset: 'ZCHF' },
   { blockchain: 'Polygon', asset: 'dEURO' },
   { blockchain: 'Solana', asset: 'SOL' },
   { blockchain: 'Solana', asset: 'USDC' },
@@ -213,7 +180,7 @@ export function isCatalogBlockchain(value: string): boolean {
  * Whether a query asset is in the hardcoded payment-link catalog.
  *
  * @param value - Trimmed asset query.
- * @returns True for a catalog asset, including ckBTC, USDC.e, and USDbC.
+ * @returns True for a catalog asset, including ckBTC and dEURO.
  */
 export function isCatalogAsset(value: string): boolean {
   return ASSET_SET.has(value);
