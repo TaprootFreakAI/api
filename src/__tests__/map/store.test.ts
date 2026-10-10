@@ -406,4 +406,43 @@ describe('MemoryMapPlaceStore', () => {
     expect(store.filters()).toEqual({ countries: [], blockchains: [], assets: [] });
     expect(store.deleteByKey('dfx', 'store-1')).toBe(false);
   });
+
+  it('records a newer transaction instant and does not move backward', () => {
+    const store = new MemoryMapPlaceStore(() => new Date('2026-09-26T00:00:00.000Z'));
+    expect(store.recordTransaction('dfx', 'store-1', '2026-09-26T00:00:00.000Z')).toBeUndefined();
+    expect(store.list(10)).toHaveLength(0);
+    const created = store.insertIfNew(input);
+    expect(created.place.lastTransactionAt).toBeNull();
+    const moved = store.recordTransaction('dfx', 'store-1', '2026-09-26T12:00:00Z');
+    expect(moved?.lastTransactionAt).toBe('2026-09-26T12:00:00.000Z');
+    const newer = '2026-09-26T18:00:00.000Z';
+    const forwarded = store.recordTransaction('dfx', 'store-1', newer);
+    expect(forwarded?.lastTransactionAt).toBe(newer);
+    const older = store.recordTransaction('dfx', 'store-1', '2026-09-26T06:00:00.000Z');
+    expect(older?.lastTransactionAt).toBe(newer);
+    const equal = store.recordTransaction('dfx', 'store-1', '2026-09-26T18:00:00Z');
+    expect(equal?.lastTransactionAt).toBe(newer);
+  });
+
+  it('ignores an unparseable argument and keeps the timestamp on insert and upsert', () => {
+    const store = new MemoryMapPlaceStore(() => new Date('2026-09-26T00:00:00.000Z'));
+    store.insertIfNew(input);
+    const seeded = store.recordTransaction('dfx', 'store-1', 'not-a-date');
+    expect(seeded?.lastTransactionAt).toBeNull();
+    const iso = '2026-09-26T00:00:00.000Z';
+    const replaced = store.recordTransaction('dfx', 'store-1', iso);
+    expect(replaced?.lastTransactionAt).toBe(iso);
+    const ignored = store.recordTransaction('dfx', 'store-1', 'not-a-date');
+    expect(ignored?.lastTransactionAt).toBe(iso);
+    const again = store.insertIfNew({ ...input, name: 'Other' });
+    expect(again.created).toBe(false);
+    expect(again.place.lastTransactionAt).toBe(iso);
+    const updated = store.upsert({ ...input, name: 'Renamed' });
+    expect(updated.place.name).toBe('Renamed');
+    expect(updated.place.lastTransactionAt).toBe(iso);
+    if (replaced !== undefined) {
+      replaced.lastTransactionAt = 'mutated';
+    }
+    expect(store.list(1)[0]?.lastTransactionAt).toBe(iso);
+  });
 });

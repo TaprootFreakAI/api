@@ -4,7 +4,7 @@ import type { MapPlaceInput, MapPlaceSupport, StoredMapPlace } from '@/lib/map/p
 import { MAP_PLACE_SCHEMA_SQL, type MapPlaceListFilter, type MapPlaceStore } from '@/lib/map/store';
 
 const MAP_PLACE_COLUMNS =
-  'id, origin, external_id, name, lat, lon, category, payment_methods, created_at, tech_provider, country, shop_name';
+  'id, origin, external_id, name, lat, lon, category, payment_methods, created_at, tech_provider, country, shop_name, last_transaction_at';
 
 type MapPlaceRow = {
   id: string;
@@ -19,6 +19,7 @@ type MapPlaceRow = {
   tech_provider: string;
   country: string | null;
   shop_name: string | null;
+  last_transaction_at: string | null;
 };
 
 function compareSupport(a: MapPlaceSupport, b: MapPlaceSupport): number {
@@ -66,6 +67,7 @@ function mapRow(row: MapPlaceRow, supports: MapPlaceSupport[]): StoredMapPlace {
     techProvider: row.tech_provider,
     country: row.country,
     shopName: row.shop_name,
+    lastTransactionAt: row.last_transaction_at,
     supports: supports.map((item) => ({ blockchain: item.blockchain, asset: item.asset })),
   };
 }
@@ -168,6 +170,9 @@ export class SqliteMapPlaceStore implements MapPlaceStore {
         if (!columns.some((column) => column.name === 'shop_name')) {
           this.#db.exec('ALTER TABLE map_place ADD COLUMN shop_name TEXT');
         }
+        if (!columns.some((column) => column.name === 'last_transaction_at')) {
+          this.#db.exec('ALTER TABLE map_place ADD COLUMN last_transaction_at TEXT');
+        }
       }
     }
     this.#db.exec(
@@ -191,8 +196,8 @@ export class SqliteMapPlaceStore implements MapPlaceStore {
     const result = this.#db
       .query(
         `INSERT INTO map_place (
-           id, origin, external_id, name, lat, lon, category, payment_methods, created_at, tech_provider, country, shop_name
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           id, origin, external_id, name, lat, lon, category, payment_methods, created_at, tech_provider, country, shop_name, last_transaction_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (origin, external_id) DO NOTHING`,
       )
       .run(
@@ -208,6 +213,7 @@ export class SqliteMapPlaceStore implements MapPlaceStore {
         techProvider,
         country,
         shopName,
+        null,
       );
     if (result.changes === 1) {
       insertSupportRows(this.#db, id, supports);
@@ -228,6 +234,7 @@ export class SqliteMapPlaceStore implements MapPlaceStore {
             blockchain: item.blockchain,
             asset: item.asset,
           })),
+          lastTransactionAt: null,
           id,
           createdAt,
         },
@@ -300,6 +307,49 @@ export class SqliteMapPlaceStore implements MapPlaceStore {
         shop_name: shopName,
       }),
     };
+  }
+
+  /**
+   * Store a newer transaction instant for an existing pin.
+   *
+   * @param origin - Pin origin.
+   * @param externalId - Caller id.
+   * @param occurredAt - Instant to store. An unparseable argument is ignored.
+   * @returns A copy of the row, or undefined when the pair is missing. A written instant is
+   * canonical ISO.
+   */
+  recordTransaction(
+    origin: string,
+    externalId: string,
+    occurredAt: string,
+  ): StoredMapPlace | undefined {
+    const existing = this.#db
+      .query(
+        `SELECT ${MAP_PLACE_COLUMNS}
+         FROM map_place WHERE origin = ? AND external_id = ?`,
+      )
+      .get(origin, externalId) as MapPlaceRow | null;
+    if (existing === null) {
+      return undefined;
+    }
+    const newMs = Date.parse(occurredAt);
+    if (!Number.isFinite(newMs)) {
+      return mapOne(this.#db, existing);
+    }
+    const canonical = new Date(newMs).toISOString();
+    const storedMs =
+      existing.last_transaction_at === null ? Number.NaN : Date.parse(existing.last_transaction_at);
+    if (Number.isFinite(storedMs) && storedMs >= newMs) {
+      return mapOne(this.#db, existing);
+    }
+    this.#db
+      .query(
+        `UPDATE map_place
+         SET last_transaction_at = ?
+         WHERE origin = ? AND external_id = ?`,
+      )
+      .run(canonical, origin, externalId);
+    return mapOne(this.#db, { ...existing, last_transaction_at: canonical });
   }
 
   /**

@@ -22,12 +22,15 @@ function app(opts: {
   token?: string;
   env?: Record<string, string | undefined>;
   fetchImpl?: (input: string, init: RequestInit) => Promise<Response>;
+  store?: MemoryMapPlaceStore;
+  now?: () => number;
 }) {
   return createApp({
-    store: new MemoryMapPlaceStore(),
+    store: opts.store ?? new MemoryMapPlaceStore(),
     env: opts.env ?? {},
     fetchImpl: opts.fetchImpl ?? (async () => new Response('{}', { status: 201 })),
     ...(opts.token === undefined ? {} : { ingestToken: opts.token }),
+    ...(opts.now === undefined ? {} : { now: opts.now }),
   });
 }
 
@@ -294,6 +297,7 @@ describe('map routes', () => {
       country: null,
       shopName: null,
       supports: [],
+      activity: 'none',
     });
   });
 
@@ -342,6 +346,7 @@ describe('map routes', () => {
       country: null,
       shopName: null,
       supports: [],
+      activity: 'none',
     });
   });
 
@@ -547,5 +552,188 @@ describe('map routes', () => {
     const bad = await api.request('/map/filters?blockchain=ethereum');
     expect(bad.status).toBe(400);
     expect(await bad.json()).toEqual({ error: 'Place support is invalid' });
+  });
+
+  it('refuses place transactions until a token is configured', async () => {
+    const tx = { origin: 'dfx', externalId: 'store-1' };
+    const missing = await app({}).request('/map/places/transactions', {
+      method: 'POST',
+      body: JSON.stringify(tx),
+    });
+    expect(missing.status).toBe(503);
+    expect(await missing.json()).toEqual({ error: 'Place ingest is not configured' });
+    const blank = await app({ token: '  ' }).request('/map/places/transactions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer secret' },
+      body: JSON.stringify(tx),
+    });
+    expect(blank.status).toBe(503);
+    expect(await blank.json()).toEqual({ error: 'Place ingest is not configured' });
+  });
+
+  it('rejects a missing or wrong bearer for place transactions', async () => {
+    const api = app({ token: 'secret' });
+    const tx = { origin: 'dfx', externalId: 'store-1' };
+    const noHeader = await api.request('/map/places/transactions', {
+      method: 'POST',
+      body: JSON.stringify(tx),
+    });
+    expect(noHeader.status).toBe(401);
+    expect(await noHeader.json()).toEqual({ error: 'Unauthorized' });
+    const wrong = await api.request('/map/places/transactions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer secreX' },
+      body: JSON.stringify(tx),
+    });
+    expect(wrong.status).toBe(401);
+    expect(await wrong.json()).toEqual({ error: 'Unauthorized' });
+  });
+
+  it('rejects invalid JSON, a bad origin, and a future occurredAt', async () => {
+    const api = app({ token: 'secret' });
+    const badJson = await api.request('/map/places/transactions', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: '{',
+    });
+    expect(badJson.status).toBe(400);
+    const badOrigin = await api.request('/map/places/transactions', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ origin: 'DFX', externalId: 'store-1' }),
+    });
+    expect(badOrigin.status).toBe(400);
+    expect(await badOrigin.json()).toEqual({ error: 'Place origin is invalid' });
+    const future = await api.request('/map/places/transactions', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        origin: 'dfx',
+        externalId: 'store-1',
+        occurredAt: new Date(Date.now() + 3 * 60 * 1000).toISOString(),
+      }),
+    });
+    expect(future.status).toBe(400);
+    expect(await future.json()).toEqual({ error: 'Place transaction time is invalid' });
+  });
+
+  it('returns 404 for an unknown pair and does not call fetchImpl', async () => {
+    const calls: string[] = [];
+    const api = app({
+      token: 'secret',
+      env: { BTCMAP_ACCESS_TOKEN: 'map-token' },
+      fetchImpl: async (input) => {
+        calls.push(input);
+        return new Response('{}', { status: 201 });
+      },
+    });
+    const missing = await api.request('/map/places/transactions', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ origin: 'dfx', externalId: 'store-1' }),
+    });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: 'Place not found' });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('records a transaction and classifies activity at the request clock', async () => {
+    const store = new MemoryMapPlaceStore();
+    const calls: string[] = [];
+    const api = app({
+      token: 'secret',
+      store,
+      env: { BTCMAP_ACCESS_TOKEN: 'map-token' },
+      fetchImpl: async (input) => {
+        calls.push(input);
+        return new Response('{}', { status: 201 });
+      },
+    });
+    const created = await api.request('/map/places', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    });
+    expect(created.status).toBe(201);
+    expect(calls).toHaveLength(1);
+    const omitted = await api.request('/map/places/transactions', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ origin: 'dfx', externalId: 'store-1' }),
+    });
+    expect(omitted.status).toBe(200);
+    expect(await omitted.json()).toEqual({ activity: 'within7Days' });
+    expect(calls).toHaveLength(1);
+    const listed = (await (await api.request('/map/places')).json()) as {
+      places: Array<{ activity: string; externalId?: string }>;
+    };
+    expect(listed.places[0]?.activity).toBe('within7Days');
+    const oldIso = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
+    const older = await api.request('/map/places/transactions', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ origin: 'dfx', externalId: 'store-1', occurredAt: oldIso }),
+    });
+    expect(older.status).toBe(200);
+    expect(await older.json()).toEqual({ activity: 'within7Days' });
+    expect(store.list(1)[0]?.lastTransactionAt).not.toBe(oldIso);
+    const afterOlder = (await (await api.request('/map/places')).json()) as {
+      places: Array<{ activity: string }>;
+    };
+    expect(afterOlder.places[0]?.activity).toBe('within7Days');
+    const other = await api.request('/map/places', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ ...body, externalId: 'store-old' }),
+    });
+    expect(other.status).toBe(201);
+    const noneRes = await api.request('/map/places/transactions', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ origin: 'dfx', externalId: 'store-old', occurredAt: oldIso }),
+    });
+    expect(noneRes.status).toBe(200);
+    expect(await noneRes.json()).toEqual({ activity: 'none' });
+    expect(store.list(10).find((row) => row.externalId === 'store-old')?.lastTransactionAt).toBe(
+      oldIso,
+    );
+    expect(calls).toHaveLength(2);
+  });
+
+  it('classifies activity from the injected clock', async () => {
+    const nowMs = Date.parse('2026-10-08T00:00:00.000Z');
+    const api = app({ token: 'secret', now: () => nowMs });
+    const created = await api.request('/map/places', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ ...body, externalId: 'ten-days', name: 'Ten Days' }),
+    });
+    expect(created.status).toBe(201);
+    const tenDays = new Date(nowMs - 10 * 24 * 60 * 60 * 1000).toISOString();
+    const older = await api.request('/map/places/transactions', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ origin: 'dfx', externalId: 'ten-days', occurredAt: tenDays }),
+    });
+    expect(older.status).toBe(200);
+    expect(await older.json()).toEqual({ activity: 'within30Days' });
+    const listed = (await (await api.request('/map/places')).json()) as {
+      places: Array<{ name: string; activity: string }>;
+    };
+    expect(listed.places.find((row) => row.name === 'Ten Days')?.activity).toBe('within30Days');
+    const seven = await api.request('/map/places', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ ...body, externalId: 'seven-days', name: 'Seven Days' }),
+    });
+    expect(seven.status).toBe(201);
+    const sevenDays = new Date(nowMs - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const recent = await api.request('/map/places/transactions', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ origin: 'dfx', externalId: 'seven-days', occurredAt: sevenDays }),
+    });
+    expect(recent.status).toBe(200);
+    expect(await recent.json()).toEqual({ activity: 'within7Days' });
   });
 });

@@ -63,25 +63,39 @@
 - **Returns / side effects:** `{ ok: true, value: { origin, externalId } }` or `{ ok: false, error }` with the same English messages as create. No I/O.
 - **Used by:** `mapRoutes` on `DELETE /map/places`.
 
+## Function: placeActivity
+
+- **Purpose:** Classify a stored transaction instant into `within7Days`, `within30Days`, or `none` relative to the request clock. `null` or an unparseable instant is `none`. Age is `nowMs` minus the parsed epoch. A future instant (negative age) is `within7Days`. Age at most `7 * 24 * 60 * 60 * 1000` ms is `within7Days`; one millisecond later through `30 * 24 * 60 * 60 * 1000` ms is `within30Days`; older than that is `none`. Exactly 7 days is `within7Days`. Exactly 30 days is `within30Days`.
+- **Inputs:** `lastTransactionAt` (`string | null`) and `nowMs` (request clock in milliseconds).
+- **Returns / side effects:** One of the three mutually exclusive activity strings. No I/O.
+- **Used by:** `toPublicMapPlace` on `GET /map/places` and `mapRoutes` on `POST /map/places/transactions`.
+
+## Function: normalizePlaceTransaction
+
+- **Purpose:** Validate a JSON body that records a shop transaction. `origin` and `externalId` use `normalizeMapPlaceKey` and the same error strings. Extra JSON fields are ignored. Omitted `occurredAt` becomes `new Date(nowMs).toISOString()`. A present `occurredAt` must be a parseable string at most 120 seconds after `nowMs`; exactly `nowMs + 120_000` is valid and one millisecond later is not. The returned instant is canonical ISO (`new Date(parsed).toISOString()`), not the raw string.
+- **Inputs:** Unknown JSON and `nowMs`. Required fields are `origin` and `externalId`. `occurredAt` is optional.
+- **Returns / side effects:** `{ ok: true, value: { origin, externalId, occurredAt } }` or `{ ok: false, error }` including `Place transaction time is invalid`. No I/O.
+- **Used by:** `mapRoutes` on `POST /map/places/transactions`.
+
 ## Function: toPublicMapPlace
 
-- **Purpose:** Strip the caller id and payment methods before a pin is shown on the public map. The tech provider, country, shop name, and supports stay on the public row.
-- **Inputs:** A stored map pin.
-- **Returns / side effects:** `id`, `origin`, `name`, `lat`, `lon`, `category`, `techProvider`, `country`, `shopName`, and `supports`. No I/O.
+- **Purpose:** Strip the caller id and payment methods before a pin is shown on the public map. The tech provider, country, shop name, and supports stay on the public row. `activity` is set from `placeActivity(place.lastTransactionAt, nowMs)`.
+- **Inputs:** A stored map pin and `nowMs` (request clock in milliseconds).
+- **Returns / side effects:** `id`, `origin`, `name`, `lat`, `lon`, `category`, `techProvider`, `country`, `shopName`, `supports`, and `activity`. No I/O.
 - **Used by:** `mapRoutes` on `GET /map/places`.
 
 ## Function: MemoryMapPlaceStore
 
-- **Purpose:** In-memory map store with the same insert-once, upsert, and delete rules as SQLite. A repeat of origin plus external id on insert returns the first row unchanged, including its tech provider, country, shop name, and supports.
-- **Inputs:** `insertIfNew` and `upsert` take a validated pin. `deleteByKey` takes origin and external id. `list` takes a positive limit and an optional filter object (`origin`, `country`, `shopName`, `blockchain`, `asset`). `filters` takes an optional blockchain.
-- **Returns / side effects:** `insertIfNew` reports whether it created the row. `upsert` inserts or updates country and shop name from the body (`null` when omitted) and replaces supports only when that field is sent. `deleteByKey` is true only when a row was removed. `list` is newest first, then id descending. Predicates are AND and apply before sort and limit. `shopName` `SPAR` matches that stored brand; `others` matches every other pin, including a missing brand. A pin with support rows matches a blockchain or asset only on those rows, and a pair must be the same row. A pin with no support rows matches the hardcoded payment-link catalog. `filters` returns distinct stored countries, blockchains, and assets; shop names are not read. `close` drops the rows.
+- **Purpose:** In-memory map store with the same insert-once, upsert, delete, and `recordTransaction` rules as SQLite. New rows store `lastTransactionAt` null. A repeat of origin plus external id on insert returns the first row unchanged, including its tech provider, country, shop name, supports, and last transaction instant. An upsert updates the fields it already updates and does not clear the timestamp.
+- **Inputs:** `insertIfNew` and `upsert` take a validated pin. `recordTransaction` takes origin, external id, and an occurred-at string. `deleteByKey` takes origin and external id. `list` takes a positive limit and an optional filter object (`origin`, `country`, `shopName`, `blockchain`, `asset`). `filters` takes an optional blockchain.
+- **Returns / side effects:** `insertIfNew` reports whether it created the row. `upsert` inserts or updates country and shop name from the body (`null` when omitted) and replaces supports only when that field is sent. `recordTransaction` returns a copy or undefined when the pair is missing. An unparseable `occurredAt` does not change the row. A written instant is `new Date(newMs).toISOString()`. It does not insert, does not move an equal or newer stored instant backward, and replaces a null or unparseable stored value. `deleteByKey` is true only when a row was removed. `list` is newest first, then id descending. Predicates are AND and apply before sort and limit. `shopName` `SPAR` matches that stored brand; `others` matches every other pin, including a missing brand. A pin with support rows matches a blockchain or asset only on those rows, and a pair must be the same row. A pin with no support rows matches the hardcoded payment-link catalog. `filters` returns distinct stored countries, blockchains, and assets; shop names are not read. `close` drops the rows.
 - **Used by:** Unit tests. The process uses `SqliteMapPlaceStore`.
 
 ## Function: SqliteMapPlaceStore
 
-- **Purpose:** SQLite driver for map pins. The schema is `MAP_PLACE_SCHEMA_SQL`. Opening an older file adds `tech_provider`, `country`, and `shop_name` when those columns are missing, creates `map_place_support` and its indexes if missing, and backfills `shop_name` to SPAR for origin `spar` when that column is null. A conflicting insert does not overwrite the first row.
-- **Inputs:** Constructor takes a SQLite filename or `:memory:`. `upsert` and `deleteByKey` use the same origin and external id pair as insert. `list` takes a positive limit and an optional filter object. Predicates are AND and apply before sort and limit. A pin with no support rows uses the same hardcoded payment-link catalog as the memory store. SQLite binds every value. `filters` takes an optional blockchain.
-- **Returns / side effects:** Opens the file, enables foreign keys, applies the schema, and implements `MapPlaceStore`. Present filter fields are AND-ed before the sort and the limit. Deleting a pin deletes its support rows. `close` closes the handle.
+- **Purpose:** SQLite driver for map pins. The schema is `MAP_PLACE_SCHEMA_SQL`. Opening an older file adds `tech_provider`, `country`, `shop_name`, and `last_transaction_at` when those columns are missing, creates `map_place_support` and its indexes if missing, and backfills `shop_name` to SPAR for origin `spar` when that column is null. New rows store `last_transaction_at` null. An upsert and a repeat insert do not clear the timestamp. A conflicting insert does not overwrite the first row.
+- **Inputs:** Constructor takes a SQLite filename or `:memory:`. `upsert`, `recordTransaction`, and `deleteByKey` use the same origin and external id pair as insert. `list` takes a positive limit and an optional filter object. Predicates are AND and apply before sort and limit. A pin with no support rows uses the same hardcoded payment-link catalog as the memory store. SQLite binds every value. `filters` takes an optional blockchain.
+- **Returns / side effects:** Opens the file, enables foreign keys, applies the schema, and implements `MapPlaceStore`. `recordTransaction` updates only `last_transaction_at` with the same rules as the memory store. An unparseable `occurredAt` does not change the row. A written instant is `new Date(newMs).toISOString()`. Present filter fields are AND-ed before the sort and the limit. Deleting a pin deletes its support rows. `close` closes the handle.
 - **Used by:** The process entrypoint. The HTTP end-to-end run exercises it.
 
 ## Function: mapSubmissionBody
@@ -100,9 +114,9 @@
 
 ## Function: mapRoutes
 
-- **Purpose:** `GET /map/places` is public and may take `origin`, `country`, `shopName`, `blockchain`, and `asset` to restrict the list. `GET /map/filters` is public and returns the shop name tokens, distinct countries, the payment-link catalog merged with stored blockchains and assets, and `techProviders`. `POST /map/places` requires the ingest bearer and creates a pin at most once. `PUT /map/places` upserts a pin. `DELETE /map/places` removes a pin by origin and external id.
-- **Inputs:** Store, optional ingest token, environment, and fetch.
-- **Returns / side effects:** GET `/places` returns `{ places }`. GET `/filters` returns `{ shopNames, countries, blockchains, assets, techProviders }`. POST and PUT return 201 `{ created: true, id, btcmap }` or 200 `{ created: false, id, btcmap: "skipped" }`. DELETE returns 200 `{ deleted: true }` or `{ deleted: false }`.
+- **Purpose:** `GET /map/places` is public and may take `origin`, `country`, `shopName`, `blockchain`, and `asset` to restrict the list. `GET /map/filters` is public and returns the shop name tokens, distinct countries, the payment-link catalog merged with stored blockchains and assets, and `techProviders`. `POST /map/places` requires the ingest bearer and creates a pin at most once. `PUT /map/places` upserts a pin. `DELETE /map/places` removes a pin by origin and external id. `POST /map/places/transactions` records a transaction time on an existing pin and does not call BTC Map.
+- **Inputs:** Store, optional ingest token, environment, fetch, and optional `now` (defaults to `Date.now`).
+- **Returns / side effects:** GET `/places` returns `{ places }` with `activity` from the request clock. GET `/filters` returns `{ shopNames, countries, blockchains, assets, techProviders }`. POST and PUT return 201 `{ created: true, id, btcmap }` or 200 `{ created: false, id, btcmap: "skipped" }`. DELETE returns 200 `{ deleted: true }` or `{ deleted: false }`. POST `/places/transactions` returns 200 `{ activity }` or 404 `{ error: "Place not found" }` and does not call BTC Map.
 - **Used by:** `createApp`, mounted at `/map`.
 
 ## Function: healthRoutes
@@ -115,6 +129,6 @@
 ## Function: createApp
 
 - **Purpose:** Build the HTTP application: health and the map routes.
-- **Inputs:** Store, optional ingest token, environment, and fetch.
+- **Inputs:** Store, optional ingest token, environment, fetch, and an optional clock. When the clock is omitted the routes use `Date.now`.
 - **Returns / side effects:** A Hono app. It does not listen and does not open a second database.
 - **Used by:** The process entrypoint and the tests.
