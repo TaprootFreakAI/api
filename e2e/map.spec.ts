@@ -483,7 +483,8 @@ test('Function: unstatedPaymentSql — a pin without supports uses the payment-l
   expect(await names('blockchain=BinancePay')).not.toContain('Catalog Gifts Pin');
   expect(await names('asset=ckBTC')).toContain('Catalog DFX Pin');
   expect(await names('asset=ckBTC')).not.toContain('Catalog Gifts Pin');
-  expect(await names('asset=USDC.e')).toContain('Catalog DFX Pin');
+  expect(await names('asset=dEURO')).toContain('Catalog DFX Pin');
+  expect(await names('asset=LINK')).not.toContain('Catalog DFX Pin');
   expect(await names('blockchain=Plasma')).not.toContain('Catalog DFX Pin');
   expect(await names('shopName=others')).toContain('Catalog DFX Pin');
   expect(await names('shopName=others')).toContain('Catalog Gifts Pin');
@@ -522,11 +523,12 @@ test('Function: publicFilterResponse — filters include the payment-link catalo
   expect(json.blockchains).toContain('BinancePay');
   expect(json.blockchains).not.toContain('Sepolia');
   expect(json.assets).toContain('ckBTC');
-  expect(json.assets).toContain('USDC.e');
-  expect(json.assets).toContain('USDbC');
+  expect(json.assets).not.toContain('USDC.e');
+  expect(json.assets).not.toContain('USDbC');
   const dfx = json.techProviders.find((provider) => provider.name === 'DFX.swiss');
   const gifts = json.techProviders.find((provider) => provider.name === '21.gifts');
   expect(dfx?.pairs).toContainEqual({ blockchain: 'Ethereum', asset: 'ZCHF' });
+  expect(dfx?.pairs).toContainEqual({ blockchain: 'Polygon', asset: 'ZCHF' });
   expect(dfx?.pairs).not.toContainEqual({ blockchain: 'Ethereum', asset: 'BTC' });
   expect(dfx?.blockchains).not.toContain('Plasma');
   expect(gifts).toEqual({
@@ -554,8 +556,9 @@ test('Function: isCatalogBlockchain — BinancePay is a filter and Kraken is not
 
 test('Function: isCatalogAsset — catalog asset names are filter queries', async ({ request }) => {
   expect((await request.get('/map/places?asset=ckBTC')).status()).toBe(200);
-  expect((await request.get('/map/places?asset=USDC.e')).status()).toBe(200);
-  expect((await request.get('/map/places?asset=USDbC')).status()).toBe(200);
+  expect((await request.get('/map/places?asset=USDC.e')).status()).toBe(400);
+  expect((await request.get('/map/places?asset=USDbC')).status()).toBe(400);
+  expect((await request.get('/map/places?asset=dEURO')).status()).toBe(200);
   expect((await request.get('/map/places?asset=Ethereum/ZCHF')).status()).toBe(400);
 });
 
