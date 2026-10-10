@@ -20,7 +20,7 @@ The process listens on port `3000` unless `PORT` is set. The database file is `d
 
 ## Branches
 
-Pull requests target `develop`. `main` moves only through the release pull request from `develop`. This repository does not publish a container image.
+Pull requests target `develop`. A push there publishes `dfxswiss/opencryptopay-api:beta`. `main` publishes `dfxswiss/opencryptopay-api:latest` and moves only through the release pull request from `develop`.
 
 ## Checks
 
