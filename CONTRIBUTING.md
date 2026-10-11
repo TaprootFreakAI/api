@@ -4,9 +4,9 @@ The map API keeps the same gates as the 21.gifts API.
 
 ## Branches
 
-| Branch    | Purpose                                                  | Image                              |
-| --------- | -------------------------------------------------------- | ---------------------------------- |
-| `develop` | Integration branch. Open pull requests here.             | `dfxswiss/opencryptopay-api:beta`  |
+| Branch    | Purpose                                                  | Image                               |
+| --------- | -------------------------------------------------------- | ----------------------------------- |
+| `develop` | Integration branch. Open pull requests here.             | `dfxswiss/opencryptopay-api:beta`   |
 | `main`    | Production. Moves only through the release pull request. | `dfxswiss/opencryptopay-api:latest` |
 
 - Land work on `develop` through a feature branch and a pull request. Do not push `develop` or `main` directly.
@@ -35,18 +35,18 @@ Do not lower a coverage threshold to land a change. A genuinely unreachable bran
 
 ## CI / CD
 
-| Workflow               | Trigger                             | Action                                                                 |
-| ---------------------- | ----------------------------------- | ---------------------------------------------------------------------- |
-| `ci.yaml`              | Pull request, and push to `develop` | Typecheck, lint, handbook, e2e-check, test (100% coverage), build, e2e |
-| `publish-dev.yaml`     | Push to `develop`                   | Build and push `dfxswiss/opencryptopay-api:beta`                       |
-| `publish-prd.yaml`     | Push to `main`                      | Build and push `dfxswiss/opencryptopay-api:latest`                     |
+| Workflow               | Trigger                             | Action                                                                  |
+| ---------------------- | ----------------------------------- | ----------------------------------------------------------------------- |
+| `ci.yaml`              | Pull request, and push to `develop` | Typecheck, lint, handbook, e2e-check, test (100% coverage), build, e2e  |
+| `publish-dev.yaml`     | Push to `develop`                   | Build and push `dfxswiss/opencryptopay-api:beta`                        |
+| `publish-prd.yaml`     | Push to `main`                      | Build and push `dfxswiss/opencryptopay-api:latest`                      |
 | `auto-release-pr.yaml` | Push to `develop`                   | Open the release pull request (`develop` → `main`) when there is a diff |
 
 Images are `linux/arm64`. The publish workflows push the image and do not deploy it.
 
 Publish workflows need these Actions secrets:
 
-| Secret            | Purpose                                                                 |
-| ----------------- | ----------------------------------------------------------------------- |
-| `DOCKER_USERNAME` | Docker Hub username for the push                                        |
+| Secret            | Purpose                                                                     |
+| ----------------- | --------------------------------------------------------------------------- |
+| `DOCKER_USERNAME` | Docker Hub username for the push                                            |
 | `DOCKER_PASSWORD` | Docker Hub access token with read and write on `dfxswiss/opencryptopay-api` |
